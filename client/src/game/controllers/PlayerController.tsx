@@ -104,11 +104,18 @@ export const PlayerController: React.FC<PlayerControllerProps> = ({
       }
     };
 
+    const handleAnimationEvent = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      applyAnimation(customEvent.detail);
+    };
+
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
+    window.addEventListener('trigger-animation', handleAnimationEvent);
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
+      window.removeEventListener('trigger-animation', handleAnimationEvent);
     };
   }, [applyAnimation]);
 
@@ -158,7 +165,8 @@ export const PlayerController: React.FC<PlayerControllerProps> = ({
 
       // Keep real users in the audience area, below the front edge of the stage.
       newX = Math.max(-36, Math.min(36, newX));
-      newZ = Math.max(-11.8, Math.min(34, newZ));
+      // Stage starts around z = -9, so restrict forward movement to -8.5
+      newZ = Math.max(-8.5, Math.min(34, newZ));
 
       positionRef.current.x = newX;
       positionRef.current.y = 0;

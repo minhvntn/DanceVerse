@@ -24,7 +24,7 @@ export const CameraController: React.FC<CameraControllerProps> = ({
   
   // Player tracking refs
   const currentTarget = useRef(new THREE.Vector3(targetPosition.x, targetPosition.y + 1.2, targetPosition.z));
-  const cameraOffset = useRef(new THREE.Vector3(0, 4.2, 8.5));
+  const cameraOffset = useRef(new THREE.Vector3(0, 5.0, 12.0));
   const tempTargetVec = useRef(new THREE.Vector3());
   
   // Lerp targets for non-player modes

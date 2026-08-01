@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Text } from '@react-three/drei';
 import * as THREE from 'three';
@@ -13,54 +13,72 @@ export const DJBooth: React.FC = () => {
   const hostPlayerId = currentRoom?.hostId;
   const hostPlayer = hostPlayerId ? players[hostPlayerId] : undefined;
 
-  // Use a fallback avatar for DJ if host isn't in the room or is just moving around
   const djAvatar = hostPlayer?.avatarType || 'Boy';
   const djName = hostPlayer?.nickname || 'DJ DANCEVERSE';
 
-  // DJ avatar mock player object to pass to AvatarModel
   const mockDjPlayer: Player = {
     id: 'dj-avatar',
     nickname: djName,
     avatarType: djAvatar,
     roomId: currentRoom?.id || '',
-    position: { x: 0, y: 1.5, z: -14 },
+    position: { x: 0, y: 1.8, z: -10 },
     rotation: Math.PI,
-    animation: 'Cheer', // We use Cheer/Wave to simulate mixing
+    animation: 'Cheer',
     isHost: true
   };
 
   const djRef = useRef<THREE.Group>(null);
 
+  const materials = useMemo(() => ({
+    body: new THREE.MeshStandardMaterial({ color: '#0A0A10', roughness: 0.2, metalness: 0.8 }),
+    trimPink: new THREE.MeshBasicMaterial({ color: '#FF007F' }),
+    trimCyan: new THREE.MeshBasicMaterial({ color: '#00F0FF' }),
+    deskTop: new THREE.MeshStandardMaterial({ color: '#111', roughness: 0.5 }),
+    screen: new THREE.MeshBasicMaterial({ color: '#050505' })
+  }), []);
+
   useFrame(({ clock }) => {
     if (djRef.current) {
-      // Simulate DJ bobbing to the music
       const time = clock.getElapsedTime();
-      djRef.current.position.y = 1.5 + Math.sin(time * 4) * 0.05;
+      djRef.current.position.y = 1.8 + Math.sin(time * 4) * 0.05;
     }
   });
 
   return (
-    <group position={[0, 1.5, -14]}>
+    <group position={[0, 2.0, -9]}>
       {/* The DJ Avatar */}
       <group ref={djRef}>
         <AvatarPrimitive avatarType={mockDjPlayer.avatarType} animation={mockDjPlayer.animation} />
       </group>
 
       {/* The DJ Table / Mixer */}
-      <group position={[0, 0, -0.8]}>
-        {/* Main Desk */}
-        <mesh position={[0, 0.7, 0]} castShadow>
-          <boxGeometry args={[3.5, 1.4, 1.2]} />
-          <meshStandardMaterial color="#0f172a" roughness={0.3} metalness={0.8} />
+      <group position={[0, 0, -1.5]}>
+        {/* Main Angled Desk Body */}
+        {/* We use a cylinder with 6 radial segments to create a hexagonal/angled look */}
+        <mesh position={[0, 0.7, 0]} rotation={[0, Math.PI / 2, 0]} castShadow>
+          <cylinderGeometry args={[1.5, 2.2, 1.4, 6]} />
+          <primitive object={materials.body} attach="material" />
+        </mesh>
+        
+        {/* Top trim */}
+        <mesh position={[0, 1.4, 0]} rotation={[0, Math.PI / 2, 0]}>
+           <cylinderGeometry args={[1.52, 1.52, 0.05, 6]} />
+           <primitive object={materials.trimCyan} attach="material" />
+        </mesh>
+
+        {/* Bottom trim */}
+        <mesh position={[0, 0.02, 0]} rotation={[0, Math.PI / 2, 0]}>
+           <cylinderGeometry args={[2.22, 2.22, 0.05, 6]} />
+           <primitive object={materials.trimPink} attach="material" />
         </mesh>
         
         {/* Desk Top / Mixer surface */}
-        <mesh position={[0, 1.42, 0]} rotation={[-0.1, 0, 0]}>
-          <boxGeometry args={[3.3, 0.05, 1.0]} />
-          <meshStandardMaterial color="#1e293b" />
+        <mesh position={[0, 1.42, 0]}>
+          <boxGeometry args={[3, 0.05, 1.2]} />
+          <primitive object={materials.deskTop} attach="material" />
         </mesh>
 
-        {/* CDJs (Decks) */}
+        {/* Mixer Equipment (CDJs) */}
         <mesh position={[-0.8, 1.46, 0]} rotation={[-Math.PI / 2, 0, 0]}>
           <cylinderGeometry args={[0.3, 0.3, 0.05, 32]} />
           <meshStandardMaterial color="#334155" metalness={0.9} />
@@ -69,35 +87,35 @@ export const DJBooth: React.FC = () => {
           <cylinderGeometry args={[0.3, 0.3, 0.05, 32]} />
           <meshStandardMaterial color="#334155" metalness={0.9} />
         </mesh>
-
-        {/* Mixer Center */}
         <mesh position={[0, 1.45, 0]}>
           <boxGeometry args={[0.6, 0.08, 0.8]} />
           <meshStandardMaterial color="#020617" />
         </mesh>
 
         {/* Front LED Logo Panel */}
-        <mesh position={[0, 0.7, 0.61]}>
-          <planeGeometry args={[3.2, 1.0]} />
-          <meshBasicMaterial color="#000000" />
+        <mesh position={[0, 0.7, 1.2]}>
+          <planeGeometry args={[1.8, 1.0]} />
+          <primitive object={materials.screen} attach="material" />
         </mesh>
+        
         <Text 
-          position={[0, 0.7, 0.62]} 
-          fontSize={0.35} 
-          color="#22d3ee" 
+          position={[0, 0.7, 1.21]} 
+          fontSize={0.4} 
+          color="#00F0FF" 
           anchorX="center" 
           anchorY="middle"
-          outlineWidth={0.02}
-          outlineColor="#000000"
+        >
+          D
+        </Text>
+        <Text 
+          position={[0, 0.35, 1.21]} 
+          fontSize={0.15} 
+          color="#FFFFFF" 
+          anchorX="center" 
+          anchorY="middle"
         >
           DANCEVERSE
         </Text>
-        
-        {/* Neon Strip at the bottom of the DJ desk */}
-        <mesh position={[0, 0.05, 0.62]}>
-          <boxGeometry args={[3.4, 0.05, 0.05]} />
-          <meshBasicMaterial color="#e879f9" transparent opacity={0.8} blending={THREE.AdditiveBlending} />
-        </mesh>
       </group>
     </group>
   );

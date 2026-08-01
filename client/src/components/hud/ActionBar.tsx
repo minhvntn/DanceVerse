@@ -27,7 +27,7 @@ export const ActionBar: React.FC = () => {
 
   const triggerAnimation = (item: DanceActionItem) => {
     setActiveKey(item.key);
-    socketService.emit(SOCKET_EVENTS.PLAYER_ANIMATION, { animation: item.animation });
+    window.dispatchEvent(new CustomEvent('trigger-animation', { detail: item.animation }));
   };
 
   return (
