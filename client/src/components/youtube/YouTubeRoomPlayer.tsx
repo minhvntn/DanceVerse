@@ -13,21 +13,23 @@ declare global {
 }
 
 interface YouTubeRoomPlayerProps {
-  videoId?: string | null;
-  musicState?: MusicState | null;
+  videoId: string;
+  musicState: MusicState | null;
   volume?: number;
   isMuted?: boolean;
   className?: string;
   onPlayerReady?: () => void;
+  onError?: () => void;
 }
 
 export const YouTubeRoomPlayer: React.FC<YouTubeRoomPlayerProps> = ({
   videoId,
   musicState,
-  volume = 80,
+  volume = 50,
   isMuted = false,
   className = '',
-  onPlayerReady
+  onPlayerReady,
+  onError
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<any>(null);
@@ -38,6 +40,7 @@ export const YouTubeRoomPlayer: React.FC<YouTubeRoomPlayerProps> = ({
   const musicStateRef = useRef<MusicState | null | undefined>(musicState);
   const videoIdRef = useRef<string | null | undefined>(videoId);
   const hasEndedRef = useRef<boolean>(false);
+  const onErrorRef = useRef(onError);
 
   // Keep refs in sync with props
   useEffect(() => {
@@ -47,6 +50,10 @@ export const YouTubeRoomPlayer: React.FC<YouTubeRoomPlayerProps> = ({
   useEffect(() => {
     videoIdRef.current = videoId;
   }, [videoId]);
+
+  useEffect(() => {
+    onErrorRef.current = onError;
+  }, [onError]);
 
   // Load YouTube IFrame API script
   useEffect(() => {
@@ -131,6 +138,7 @@ export const YouTubeRoomPlayer: React.FC<YouTubeRoomPlayerProps> = ({
     const msg = errorMessages[errorCode] || `YouTube error (code ${errorCode})`;
     console.warn('[YouTubePlayer] Error:', msg);
     setPlayerError(msg);
+    onErrorRef.current?.();
   }, []);
 
   // Initialize YT.Player once API is loaded and container is mounted
@@ -270,7 +278,7 @@ export const YouTubeRoomPlayer: React.FC<YouTubeRoomPlayerProps> = ({
   }, [musicState?.status, musicState?.currentVideoId, musicState?.revision, isReady]);
 
   return (
-    <div className={`relative bg-black overflow-hidden rounded-lg ${className}`}>
+    <div className={`relative w-full h-full bg-black overflow-hidden rounded-lg ${className}`}>
       <div ref={containerRef} className="w-full h-full" />
       {playerError && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/80 z-10">

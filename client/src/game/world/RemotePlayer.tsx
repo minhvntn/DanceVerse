@@ -4,6 +4,8 @@ import { Html } from '@react-three/drei';
 import * as THREE from 'three';
 import { Player } from '../../types';
 import { AvatarPrimitive } from '../avatars/AvatarPrimitive';
+import { getAutoDanceAnimation } from '../avatars/danceUtils';
+import { useRoomStore } from '../../stores/useRoomStore';
 
 interface RemotePlayerProps {
   player: Player;
@@ -17,6 +19,11 @@ export const RemotePlayer: React.FC<RemotePlayerProps> = ({ player, showNames, l
   const targetRotY = useRef(player.rotation);
   const [activeEmote, setActiveEmote] = useState<string | null>(player.emote || null);
   const [isDistant, setIsDistant] = useState(false);
+  const isMusicPlaying = useRoomStore((state) => state.musicState?.status === 'playing');
+  const playerAnimation = player.animation || 'Idle';
+  const visibleAnimation = isMusicPlaying && playerAnimation === 'Idle'
+    ? getAutoDanceAnimation(player.id)
+    : playerAnimation;
 
   useEffect(() => {
     targetPos.current.set(player.position.x, player.position.y, player.position.z);
@@ -67,7 +74,12 @@ export const RemotePlayer: React.FC<RemotePlayerProps> = ({ player, showNames, l
         </mesh>
       ) : (
         <>
-          <AvatarPrimitive avatarType={player.avatarType} animation={player.animation || 'Idle'} scale={1} />
+          <AvatarPrimitive
+            avatarType={player.avatarType}
+            animation={visibleAnimation}
+            scale={1}
+            phase={(player.id.length % 7) * 0.45}
+          />
 
           {/* Floating Emote Bubble */}
           {activeEmote && (

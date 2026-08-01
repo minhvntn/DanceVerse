@@ -1,7 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Html } from '@react-three/drei';
+import { useFrame, useThree } from '@react-three/fiber';
+import * as THREE from 'three';
 import { useRoomStore } from '../../stores/useRoomStore';
-import { YouTubeStagePlayer } from './YouTubeStagePlayer';
+import { YouTubeRoomPlayer } from '../youtube/YouTubeRoomPlayer';
 import { ConcertScreenFallback } from './ConcertScreen';
 
 export const ConcertVideoScreen: React.FC = () => {
@@ -9,45 +11,81 @@ export const ConcertVideoScreen: React.FC = () => {
   const activeStageCue = useRoomStore((state) => state.activeStageCue);
   
   const [isFallback, setIsFallback] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const { camera, size } = useThree();
   
-  // Reset fallback state when a new video starts
   useEffect(() => {
     setIsFallback(false);
   }, [musicState?.currentVideoId]);
 
+  const handlePlayerError = useCallback(() => {
+    setIsFallback(true);
+  }, []);
+
   const hasVideo = musicState && musicState.currentVideoId && musicState.status !== 'idle';
-  
-  // If the host triggered a screen cue, we temporarily force fallback to show the message
   const isMessageCueActive = activeStageCue?.type === 'screen';
+
+  // Plane dimensions in 3D
+  const planeWidth = 26.79;
+  const planeHeight = 10.15;
+  const planePosition = new THREE.Vector3(0, 8.5, -22.05);
+
+  useFrame(() => {
+    if (!containerRef.current) return;
+    
+    // Calculate distance from camera to the plane
+    const distance = camera.position.distanceTo(planePosition);
+    
+    // Calculate visible height at that distance (in 3D units)
+    // fov is in degrees, convert to radians
+    const fov = (camera as THREE.PerspectiveCamera).fov;
+    const vFov = (fov * Math.PI) / 180;
+    const visibleHeight = 2 * Math.tan(vFov / 2) * distance;
+    
+    // Map 3D units to screen pixels
+    const pixelsPerUnit = size.height / visibleHeight;
+    
+    const widthPx = planeWidth * pixelsPerUnit;
+    const heightPx = planeHeight * pixelsPerUnit;
+    
+    containerRef.current.style.width = `${widthPx}px`;
+    containerRef.current.style.height = `${heightPx}px`;
+  });
 
   if (!hasVideo || isFallback || isMessageCueActive) {
     return <ConcertScreenFallback />;
   }
 
-  const iframeWidth = 1920;
-  const iframeHeight = 1080;
-  
-  // 94% of 28.5 width = 26.79
-  const target3DWidth = 26.79;
-  const scale = target3DWidth / iframeWidth;
-
   return (
     <>
       <meshBasicMaterial color="#000" />
       <Html
-        transform
         center
         position={[0, 0, 0.01]}
-        scale={0.016} // ~ 26.79 / 1600
         style={{ pointerEvents: 'none' }}
+        zIndexRange={[0, 0]}
       >
-        <div style={{
-          width: '1600px',
-          height: '900px',
-          background: 'red',
-          border: '20px solid yellow',
-          boxSizing: 'border-box'
-        }} />
+        <div 
+          ref={containerRef}
+          style={{
+            backgroundColor: '#000',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            overflow: 'hidden',
+            borderRadius: '12px',
+            boxShadow: '0 0 50px rgba(0, 240, 255, 0.2)'
+          }}
+        >
+          <YouTubeRoomPlayer
+            videoId={musicState.currentVideoId!}
+            musicState={musicState}
+            onError={handlePlayerError}
+            volume={100}
+            isMuted={false}
+            className="w-full h-full"
+          />
+        </div>
       </Html>
     </>
   );

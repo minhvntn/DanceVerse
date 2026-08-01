@@ -4,7 +4,6 @@ import { Html } from '@react-three/drei';
 import * as THREE from 'three';
 import { PerformanceMode } from '../../types';
 import { useRoomStore } from '../../stores/useRoomStore';
-import { YouTubeRoomPlayer } from '../../components/youtube/YouTubeRoomPlayer';
 import { ConcertVideoScreen } from '../../components/stage/ConcertVideoScreen';
 import { StageEffects } from './effects/StageEffects';
 import { DJBooth } from './DJBooth';
@@ -166,19 +165,7 @@ export const ConcertArena: React.FC<ConcertArenaProps> = ({
         <meshBasicMaterial color="#00ffff" wireframe={isBeatDrop} transparent opacity={musicState?.status === 'playing' ? 0.8 : 0.2} />
       </mesh>
 
-      {/* Invisible YouTube Player for Audio Sync */}
-      {musicState?.currentVideoId && (
-        <Html>
-          <div style={{ position: 'absolute', top: -9999, left: -9999, width: '1px', height: '1px', opacity: 0, pointerEvents: 'none' }}>
-            <YouTubeRoomPlayer
-              videoId={musicState.currentVideoId}
-              musicState={musicState}
-              volume={80}
-              isMuted={false}
-            />
-          </div>
-        </Html>
-      )}
+      {/* Invisible YouTube Player removed - ConcertVideoScreen handles audio now */}
       {/* Screen Frame Neon Glow */}
       <mesh position={[0, 14.2, -22]}>
         <boxGeometry args={[30, 0.3, 0.4]} />

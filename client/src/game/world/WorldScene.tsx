@@ -33,6 +33,7 @@ export const WorldScene: React.FC<WorldSceneProps> = ({ activeEmote, isBeatDrop 
         shadows={shadowEnabled}
         className="w-full h-full"
       >
+        <color attach="background" args={["#020617"]} />
         <ambientLight intensity={0.55} />
         <directionalLight
           position={[10, 20, 10]}

@@ -1,10 +1,12 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Html } from '@react-three/drei';
 import * as THREE from 'three';
 import { AvatarType, DanceAnimationType, Vector3D, SOCKET_EVENTS } from '../../types';
 import { AvatarPrimitive } from '../avatars/AvatarPrimitive';
+import { getAutoDanceAnimation } from '../avatars/danceUtils';
 import { socketService } from '../../services/socket.service';
+import { useRoomStore } from '../../stores/useRoomStore';
 
 interface PlayerControllerProps {
   myPlayerId: string;
@@ -31,6 +33,7 @@ const SHORTCUT_ANIMATIONS: Record<string, DanceAnimationType> = {
 };
 
 export const PlayerController: React.FC<PlayerControllerProps> = ({
+  myPlayerId,
   nickname,
   avatarType,
   initialPosition = { x: 0, y: 0, z: 8 },
@@ -43,11 +46,25 @@ export const PlayerController: React.FC<PlayerControllerProps> = ({
   const positionRef = useRef<Vector3D>(initialPosition);
   const rotationRef = useRef<number>(0);
   const [currentAnim, setCurrentAnim] = useState<DanceAnimationType>('Idle');
+  const currentAnimRef = useRef<DanceAnimationType>('Idle');
   const [emoteBubble, setEmoteBubble] = useState<string | null>(null);
+  const isMusicPlaying = useRoomStore((state) => state.musicState?.status === 'playing');
+  const autoDance = useMemo(
+    () => getAutoDanceAnimation(myPlayerId || nickname),
+    [myPlayerId, nickname]
+  );
 
   // Key state tracking
   const keysRef = useRef<Record<string, boolean>>({});
   const lastEmitTimeRef = useRef<number>(0);
+  const manualOverrideUntilRef = useRef<number>(0);
+
+  const applyAnimation = useCallback((animation: DanceAnimationType) => {
+    if (currentAnimRef.current === animation) return;
+    currentAnimRef.current = animation;
+    setCurrentAnim(animation);
+    socketService.emit(SOCKET_EVENTS.PLAYER_ANIMATION, { animation });
+  }, []);
 
   useEffect(() => {
     if (activeEmote) {
@@ -68,15 +85,14 @@ export const PlayerController: React.FC<PlayerControllerProps> = ({
       }
 
       keysRef.current[e.key.toLowerCase()] = true;
+      manualOverrideUntilRef.current = Date.now() + 1500;
 
       // Handle dance shortcuts 1-0
       const shortcutAnim = SHORTCUT_ANIMATIONS[e.key];
       if (shortcutAnim) {
-        setCurrentAnim(shortcutAnim);
-        socketService.emit(SOCKET_EVENTS.PLAYER_ANIMATION, { animation: shortcutAnim });
+        applyAnimation(shortcutAnim);
       } else if (e.code === 'Space') {
-        setCurrentAnim('Jump');
-        socketService.emit(SOCKET_EVENTS.PLAYER_ANIMATION, { animation: 'Jump' });
+        applyAnimation('Jump');
       }
     };
 
@@ -84,9 +100,8 @@ export const PlayerController: React.FC<PlayerControllerProps> = ({
       keysRef.current[e.key.toLowerCase()] = false;
       // If releasing movement keys and not dancing, return to Idle
       if (!keysRef.current['w'] && !keysRef.current['a'] && !keysRef.current['s'] && !keysRef.current['d'] && !keysRef.current['arrowup'] && !keysRef.current['arrowdown'] && !keysRef.current['arrowleft'] && !keysRef.current['arrowright']) {
-        if (currentAnim === 'Walk' || currentAnim === 'Run') {
-          setCurrentAnim('Idle');
-          socketService.emit(SOCKET_EVENTS.PLAYER_ANIMATION, { animation: 'Idle' });
+        if (currentAnimRef.current === 'Walk' || currentAnimRef.current === 'Run') {
+          applyAnimation('Idle');
         }
       }
     };
@@ -97,7 +112,7 @@ export const PlayerController: React.FC<PlayerControllerProps> = ({
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [currentAnim]);
+  }, [applyAnimation]);
 
   useFrame((state, delta) => {
     if (!groupRef.current) return;
@@ -114,11 +129,9 @@ export const PlayerController: React.FC<PlayerControllerProps> = ({
     const isMoving = moveZ !== 0 || moveX !== 0;
 
     if (isMoving) {
+      manualOverrideUntilRef.current = Date.now() + 1500;
       const targetAnim: DanceAnimationType = isRunning ? 'Run' : 'Walk';
-      if (currentAnim !== targetAnim) {
-        setCurrentAnim(targetAnim);
-        socketService.emit(SOCKET_EVENTS.PLAYER_ANIMATION, { animation: targetAnim });
-      }
+      applyAnimation(targetAnim);
 
       const speed = (isRunning ? 11 : 6.5) * delta;
 
@@ -163,6 +176,10 @@ export const PlayerController: React.FC<PlayerControllerProps> = ({
     } else {
       // Sync position with ref
       groupRef.current.position.set(positionRef.current.x, positionRef.current.y, positionRef.current.z);
+
+      if (Date.now() >= manualOverrideUntilRef.current) {
+        applyAnimation(isMusicPlaying ? autoDance : 'Idle');
+      }
     }
   });
 
