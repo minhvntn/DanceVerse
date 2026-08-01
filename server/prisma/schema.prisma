@@ -1,0 +1,203 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+  id                  String    @id @default(cuid())
+  email               String?   @unique
+  emailVerifiedAt     DateTime?
+  username            String    @unique
+  displayName         String
+  passwordHash        String?
+  avatarType          String
+  avatarConfig        String?
+  profileImageUrl     String?
+  onboardingCompleted Boolean   @default(false)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  lastLoginAt         DateTime?
+  isActive            Boolean   @default(true)
+
+  oauthAccounts   OAuthAccount[]
+
+  preferences     UserPreference?
+  refreshSessions RefreshSession[]
+  ownedRooms      Room[]             @relation("RoomOwner")
+  roomMemberships RoomMember[]
+  playlists       UserPlaylist[]
+  playlistItems   UserPlaylistItem[]
+  roomHistory     RoomHistory[]
+}
+
+model UserPreference {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  musicVolume        Int     @default(80)
+  effectsEnabled     Boolean @default(true)
+  chatVisible        Boolean @default(true)
+  playerNamesVisible Boolean @default(true)
+  performanceMode    String  @default("auto")
+  language           String  @default("en")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model OAuthAccount {
+  id                    String    @id @default(cuid())
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  provider              String
+  providerAccountId     String
+
+  email                 String?
+  displayName           String?
+  avatarUrl             String?
+
+  accessTokenEncrypted  String?
+  refreshTokenEncrypted String?
+  tokenExpiresAt        DateTime?
+  scope                 String?
+
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@unique([provider, providerAccountId])
+  @@unique([userId, provider])
+  @@index([userId])
+}
+
+model RefreshSession {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  tokenHash String
+  userAgent String?
+  ipAddress String?
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+}
+
+model Room {
+  id      String  @id @default(cuid())
+  slug    String  @unique
+  name    String
+  ownerId String?
+  owner   User?   @relation("RoomOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+
+  visibility        String
+  passwordHash      String?
+  maxPlayers        Int
+  allowChat         Boolean @default(true)
+  allowGuestEmotes  Boolean @default(true)
+  allowSongRequests Boolean @default(true)
+  allowGuestVoting  Boolean @default(true)
+
+  status    String    @default("waiting")
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  endedAt   DateTime?
+
+  members        RoomMember[]
+  playlistItems  RoomPlaylistItem[]
+  historyEntries RoomHistory[]
+}
+
+model RoomMember {
+  id     String @id @default(cuid())
+  roomId String
+  room   Room   @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  sessionId String
+  nickname  String
+  role      String
+  joinedAt  DateTime  @default(now())
+  leftAt    DateTime?
+
+  @@index([roomId])
+  @@index([userId])
+}
+
+model UserPlaylist {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name        String
+  description String?
+  isPublic    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  items UserPlaylistItem[]
+}
+
+model UserPlaylistItem {
+  id         String       @id @default(cuid())
+  playlistId String
+  playlist   UserPlaylist @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  source       String
+  sourceId     String
+  originalUrl  String
+  title        String
+  thumbnailUrl String?
+  duration     Int?
+  position     Int
+  addedAt      DateTime @default(now())
+
+  @@unique([playlistId, sourceId])
+}
+
+model RoomPlaylistItem {
+  id     String @id @default(cuid())
+  roomId String
+  room   Room   @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  source        String
+  sourceId      String
+  originalUrl   String
+  title         String
+  thumbnailUrl  String?
+  duration      Int?
+  position      Int
+  requestedById String?
+  addedAt       DateTime @default(now())
+
+  @@unique([roomId, sourceId])
+  @@index([roomId, position])
+}
+
+model RoomHistory {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  roomId String
+  room   Room   @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  roomName     String
+  role         String
+  joinedAt     DateTime
+  leftAt       DateTime?
+  totalSeconds Int?
+  createdAt    DateTime  @default(now())
+
+  @@index([userId, joinedAt])
+}
