@@ -19,7 +19,7 @@ export function selectWorldPlayers(
 
 export function getLocalPlayerLabel(nickname: string, role: UserRole): string {
   const cleanNickname = nickname.trim();
-  if (role !== 'host') return cleanNickname || 'Dancer';
+  if (role !== 'host') return cleanNickname || 'Fan';
   if (!cleanNickname || cleanNickname.toLowerCase() === 'host') return 'HOST';
   return `${cleanNickname} · HOST`;
 }

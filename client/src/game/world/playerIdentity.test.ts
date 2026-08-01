@@ -43,7 +43,8 @@ describe('getLocalPlayerLabel', () => {
     expect(getLocalPlayerLabel('Host', 'host')).toBe('HOST');
   });
 
-  it('keeps a guest nickname unchanged', () => {
+  it('uses Fan for an empty guest while preserving an explicit nickname', () => {
+    expect(getLocalPlayerLabel('', 'guest')).toBe('Fan');
     expect(getLocalPlayerLabel('Dancer', 'guest')).toBe('Dancer');
   });
 });

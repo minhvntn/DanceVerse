@@ -23,7 +23,7 @@ export const WorldScene: React.FC<WorldSceneProps> = ({ activeEmote, isBeatDrop 
   const playerPosRef = useRef<Vector3D>({ x: 0, y: 0, z: 8 });
 
   const { localPlayer, remotePlayers } = selectWorldPlayers(players, myPlayerId);
-  const localNickname = localPlayer?.nickname || nickname || 'Dancer';
+  const localNickname = localPlayer?.nickname || nickname || 'Fan';
   const localAvatarType = localPlayer?.avatarType || avatarType;
   const localLabel = getLocalPlayerLabel(localNickname, role);
 

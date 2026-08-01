@@ -34,7 +34,7 @@ export const AvatarSelectPage: React.FC = () => {
           <span className="text-xl font-extrabold text-white">DanceVerse Live</span>
         </div>
         <div className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-slate-900/80 border border-white/10">
-          <span className="text-xs text-slate-400">Dancer:</span>
+          <span className="text-xs text-slate-400">Fan:</span>
           {!user ? (
             <input
               type="text"

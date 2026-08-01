@@ -157,7 +157,7 @@ export const LobbyPage: React.FC = () => {
     setJoiningId(roomId);
     const socket = socketService.getSocket();
     socket.emit(SOCKET_EVENTS.ROOM_JOIN, {
-      nickname: nickname || 'Dancer',
+      nickname: nickname || 'Fan',
       avatarType,
       roomId,
       password,
