@@ -1,70 +1,46 @@
-import React, { useRef, useMemo } from 'react';
-import { useFrame } from '@react-three/fiber';
+import React, { useMemo, useRef } from 'react';
+import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
-import { PerformanceMode } from '../../../types';
+import { ConcertVisualState, getStageDensity } from '../stageVisuals';
 
 interface FogEffectsProps {
-  performanceMode: PerformanceMode;
-  isPlaying: boolean;
+  visualState: ConcertVisualState;
 }
 
-export const FogEffects: React.FC<FogEffectsProps> = ({ performanceMode, isPlaying }) => {
-  const fogGroupRef = useRef<THREE.Group>(null);
+export const FogEffects: React.FC<FogEffectsProps> = ({ visualState }) => {
+  const { camera } = useThree();
+  const groupRef = useRef<THREE.Group>(null);
+  const count = getStageDensity(visualState.quality).fog;
+  const particles = useMemo(() => Array.from({ length: count }, (_, index) => ({
+    x: Math.sin(index * 12.73) * 17,
+    y: 0.35 + ((index * 0.61) % 2.2),
+    z: -20 + ((index * 3.17) % 15),
+    phase: index * 0.57,
+    speed: 0.09 + (index % 5) * 0.018,
+    scale: 2.1 + (index % 4) * 0.58
+  })), [count]);
 
-  const numParticles = useMemo(() => {
-    if (performanceMode === 'Low') return 0;
-    if (performanceMode === 'Medium') return 10;
-    return 20;
-  }, [performanceMode]);
-
-  const particles = useMemo(() => {
-    return Array.from({ length: numParticles }).map(() => ({
-      x: (Math.random() - 0.5) * 16,
-      y: Math.random() * 4,
-      z: (Math.random() - 0.5) * 4 - 14,
-      speed: Math.random() * 0.5 + 0.2,
-      scale: Math.random() * 2 + 1,
-      opacity: Math.random() * 0.3 + 0.1
-    }));
-  }, [numParticles]);
-
-  const material = useMemo(() => new THREE.MeshBasicMaterial({ 
-    color: '#E0E0FF', 
-    transparent: true, 
-    opacity: 0.2, 
-    blending: THREE.AdditiveBlending,
-    depthWrite: false
-  }), []);
-
-  useFrame((state) => {
-    if (!fogGroupRef.current) return;
-    const time = state.clock.getElapsedTime();
-
-    fogGroupRef.current.children.forEach((mesh, index) => {
-      const p = particles[index];
-      if (p) {
-        // Drift upwards
-        mesh.position.y += p.speed * 0.05;
-        if (mesh.position.y > 6) mesh.position.y = 0;
-        
-        // Gentle sway
-        mesh.position.x += Math.sin(time + index) * 0.02;
-
-        // Pulse opacity
-        const mat = (mesh as THREE.Mesh).material as THREE.MeshBasicMaterial;
-        mat.opacity = (isPlaying ? p.opacity : p.opacity * 0.3) * (1 - mesh.position.y / 6);
-      }
+  useFrame(({ clock }) => {
+    const time = clock.getElapsedTime();
+    groupRef.current?.children.forEach((child, index) => {
+      const particle = particles[index];
+      if (!particle) return;
+      child.position.x = particle.x + Math.sin(time * particle.speed * 4 + particle.phase) * 2.4;
+      child.position.y = particle.y + Math.sin(time * 0.18 + particle.phase) * 0.35;
+      child.quaternion.copy(camera.quaternion);
+      const material = (child as THREE.Mesh).material as THREE.MeshBasicMaterial;
+      material.opacity = (visualState.isPlaying ? 0.07 : 0.025) + Math.sin(time * 0.3 + particle.phase) * 0.012;
     });
   });
 
-  if (numParticles === 0) return null;
+  if (count === 0) return null;
 
   return (
-    <group ref={fogGroupRef}>
-      {particles.map((p, i) => (
-        <mesh key={i} position={[p.x, p.y, p.z]} scale={[p.scale, p.scale, p.scale]}>
-          <circleGeometry args={[1, 16]} />
-          <primitive object={material} attach="material" />
+    <group ref={groupRef}>
+      {particles.map((particle, index) => (
+        <mesh key={index} position={[particle.x, particle.y, particle.z]} scale={[particle.scale * 2.4, particle.scale, 1]}>
+          <circleGeometry args={[1, 20]} />
+          <meshBasicMaterial color={index % 2 === 0 ? '#A5E9FF' : '#C4A5FF'} transparent opacity={0.06} blending={THREE.AdditiveBlending} depthWrite={false} toneMapped={false} />
         </mesh>
       ))}
     </group>

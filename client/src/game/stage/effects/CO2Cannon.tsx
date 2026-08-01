@@ -21,7 +21,8 @@ export const CO2Cannon: React.FC<CO2CannonProps> = ({ position, trigger }) => {
         velocity: new THREE.Vector3((Math.random() - 0.5) * 2, Math.random() * 15 + 10, (Math.random() - 0.5) * 2),
         life: 0,
         maxLife: Math.random() * 1.5 + 0.5,
-        scale: Math.random() * 2 + 1
+        baseScale: Math.random() * 2 + 1,
+        scale: 1
       });
     }
     return data;
@@ -42,6 +43,7 @@ export const CO2Cannon: React.FC<CO2CannonProps> = ({ position, trigger }) => {
         if (data.life <= 0) {
           data.life = data.maxLife;
           data.position.set((Math.random() - 0.5) * 1.5, 0, (Math.random() - 0.5) * 1.5);
+          data.scale = data.baseScale;
         }
       }
 

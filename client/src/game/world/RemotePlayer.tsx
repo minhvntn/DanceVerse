@@ -4,16 +4,22 @@ import { Html } from '@react-three/drei';
 import * as THREE from 'three';
 import { Player } from '../../types';
 import { AvatarPrimitive } from '../avatars/AvatarPrimitive';
-import { getAutoDanceAnimation } from '../avatars/danceUtils';
 import { useRoomStore } from '../../stores/useRoomStore';
+import type { StageChoreographyState } from '../../hooks/useStageChoreography';
 
 interface RemotePlayerProps {
   player: Player;
   showNames: boolean;
   localPosRef: React.MutableRefObject<THREE.Vector3 | {x: number, y: number, z: number}>;
+  stageChoreography: StageChoreographyState;
 }
 
-export const RemotePlayer: React.FC<RemotePlayerProps> = ({ player, showNames, localPosRef }) => {
+export const RemotePlayer: React.FC<RemotePlayerProps> = ({
+  player,
+  showNames,
+  localPosRef,
+  stageChoreography
+}) => {
   const groupRef = useRef<THREE.Group>(null);
   const targetPos = useRef(new THREE.Vector3(player.position.x, player.position.y, player.position.z));
   const targetRotY = useRef(player.rotation);
@@ -22,9 +28,7 @@ export const RemotePlayer: React.FC<RemotePlayerProps> = ({ player, showNames, l
   const isMusicPlaying = useRoomStore((state) => state.musicState?.status === 'playing');
   const playerAnimation = player.animation || 'Idle';
   const visibleAnimation = player.isNpc
-    ? (isMusicPlaying
-      ? (playerAnimation === 'Idle' ? getAutoDanceAnimation(player.id) : playerAnimation)
-      : 'Idle')
+    ? stageChoreography.animation
     : playerAnimation;
   const audienceMotion = !player.isNpc && isMusicPlaying && visibleAnimation === 'Idle';
 
@@ -83,8 +87,10 @@ export const RemotePlayer: React.FC<RemotePlayerProps> = ({ player, showNames, l
             avatarType={player.avatarType}
             animation={visibleAnimation}
             audienceMotion={audienceMotion}
+            stageDancer={player.isNpc}
+            animationClock={player.isNpc ? stageChoreography.animationClock : undefined}
             scale={1}
-            phase={(player.id.length % 7) * 0.45}
+            phase={player.isNpc ? 0 : (player.id.length % 7) * 0.45}
           />
 
           {/* Floating Emote Bubble */}

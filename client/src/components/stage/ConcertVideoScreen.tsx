@@ -76,8 +76,8 @@ export const ConcertVideoScreen: React.FC = () => {
               alignItems: 'center',
               justifyContent: 'center',
               overflow: 'hidden',
-              borderRadius: '12px',
-              boxShadow: '0 0 50px rgba(0, 240, 255, 0.2)'
+              borderRadius: '3px',
+              boxShadow: '0 0 32px rgba(0, 240, 255, 0.35), 0 0 72px rgba(255, 0, 127, 0.18)'
             }}
           >
             <YouTubeRoomPlayer

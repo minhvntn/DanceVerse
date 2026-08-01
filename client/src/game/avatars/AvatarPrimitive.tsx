@@ -2,6 +2,9 @@ import React, { useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { AvatarType, DanceAnimationType } from '../../types';
+import { AvatarAccessories } from './AvatarAccessories';
+import { AvatarFace } from './AvatarFace';
+import { AvatarOutfit } from './AvatarOutfit';
 
 interface AvatarPrimitiveProps {
   avatarType: AvatarType;
@@ -14,60 +17,71 @@ interface AvatarPrimitiveProps {
   phase?: number;
   simplified?: boolean;
   audienceMotion?: boolean;
+  stageDancer?: boolean;
+  animationClock?: () => number;
 }
 
 export const AVATAR_CONFIGS: Record<AvatarType, {
   name: string;
   primaryColor: string;
   secondaryColor: string;
+  accentColor: string;
   description: string;
 }> = {
   Boy: {
     name: 'Cyber Boy',
     primaryColor: '#00F0FF',
-    secondaryColor: '#1E3A8A',
+    secondaryColor: '#2552D9',
+    accentColor: '#FFE45E',
     description: 'Street dancer with neon cyber kicks.'
   },
   Girl: {
     name: 'Pop Girl',
-    primaryColor: '#FF007F',
-    secondaryColor: '#831843',
+    primaryColor: '#FF2B9B',
+    secondaryColor: '#7C3AED',
+    accentColor: '#FFE45E',
     description: 'Pop diva ready to light up the stage.'
   },
   Robot: {
     name: 'B-Bot 3000',
-    primaryColor: '#94A3B8',
-    secondaryColor: '#0284C7',
+    primaryColor: '#B8C7DA',
+    secondaryColor: '#2563EB',
+    accentColor: '#00F0FF',
     description: 'Synthesizer droid programmed to shuffle.'
   },
   Panda: {
     name: 'DJ Panda',
     primaryColor: '#FFFFFF',
     secondaryColor: '#1E293B',
+    accentColor: '#FF5AA5',
     description: 'Chubby bass-dropping bamboo lover.'
   },
   Alien: {
     name: 'Zorlax',
-    primaryColor: '#39FF14',
-    secondaryColor: '#047857',
+    primaryColor: '#62FF38',
+    secondaryColor: '#067A67',
+    accentColor: '#00F0FF',
     description: 'Galactic groover from Nebula X.'
   },
   Cat: {
     name: 'Neko Chan',
-    primaryColor: '#FB923C',
-    secondaryColor: '#FDE047',
+    primaryColor: '#FF963D',
+    secondaryColor: '#8B3F2F',
+    accentColor: '#FFE45E',
     description: 'Agile breakdancing kitty with sass.'
   },
   Bunny: {
     name: 'Hop Hop',
     primaryColor: '#E879F9',
     secondaryColor: '#FFFFFF',
+    accentColor: '#FF8CC6',
     description: 'High-energy jumper who never misses a beat.'
   },
   Dinosaur: {
     name: 'Rexy',
-    primaryColor: '#22C55E',
-    secondaryColor: '#EAB308',
+    primaryColor: '#24D26D',
+    secondaryColor: '#087F5B',
+    accentColor: '#FFD84D',
     description: 'Prehistoric party beast with stomping moves.'
   }
 };
@@ -82,11 +96,16 @@ export const AvatarPrimitive: React.FC<AvatarPrimitiveProps> = ({
   emote,
   phase = 0,
   simplified = false,
-  audienceMotion = false
+  audienceMotion = false,
+  stageDancer = false,
+  animationClock
 }) => {
   const groupRef = useRef<THREE.Group>(null);
+  const visualRootRef = useRef<THREE.Group>(null);
   const headRef = useRef<THREE.Group>(null);
-  const torsoRef = useRef<THREE.Mesh>(null);
+  const torsoRef = useRef<THREE.Group>(null);
+  const eyeRef = useRef<THREE.Group>(null);
+  const accessoryRef = useRef<THREE.Group>(null);
   const leftArmRef = useRef<THREE.Group>(null);
   const rightArmRef = useRef<THREE.Group>(null);
   const leftLegRef = useRef<THREE.Group>(null);
@@ -95,10 +114,10 @@ export const AvatarPrimitive: React.FC<AvatarPrimitiveProps> = ({
   const config = AVATAR_CONFIGS[avatarType] || AVATAR_CONFIGS.Boy;
 
   useFrame((state) => {
-    const time = state.clock.getElapsedTime() + phase;
+    const time = (animationClock ? animationClock() : state.clock.getElapsedTime()) + phase;
 
     if (isPreview && groupRef.current) {
-      groupRef.current.rotation.y = time * 0.8;
+      groupRef.current.rotation.y = Math.sin(time * 0.45) * 0.2;
     }
 
     // Procedural math animations
@@ -127,7 +146,7 @@ export const AvatarPrimitive: React.FC<AvatarPrimitiveProps> = ({
       torso.position.y = 0.68;
       torso.rotation.set(0, 0, 0);
       torso.scale.set(1, 1, 1);
-      head.position.set(0, 1.42, 0);
+      head.position.set(0, 1.47, 0);
       head.rotation.set(0, 0, 0);
       leftArm.rotation.set(0, 0, 0.12);
       rightArm.rotation.set(0, 0, -0.12);
@@ -253,162 +272,196 @@ export const AvatarPrimitive: React.FC<AvatarPrimitiveProps> = ({
         rightLeg.rotation.x = pulse * 0.5;
         if (!isPreview) group.position.y = Math.abs(pulse) * 0.25;
       }
+
+      if (stageDancer && animation !== 'Idle') {
+        const stagePulse = Math.sin(time * 6.2);
+        leftArm.rotation.x *= 1.12;
+        leftArm.rotation.z *= 1.08;
+        rightArm.rotation.x *= 1.12;
+        rightArm.rotation.z *= 1.08;
+        torso.rotation.z *= 1.1;
+        torso.rotation.x += stagePulse * 0.045;
+        head.rotation.y += stagePulse * 0.055;
+        group.position.y += Math.abs(stagePulse) * 0.035;
+      }
+
+      const secondaryBounce = Math.sin(time * 3.4) * 0.5 + 0.5;
+      head.position.y += secondaryBounce * 0.012;
+      head.rotation.z += Math.sin(time * 1.8) * 0.018;
+
+      if (visualRootRef.current) {
+        const squash = Math.abs(Math.sin(time * (animation === 'Idle' ? 2.6 : 5.2)));
+        visualRootRef.current.scale.set(
+          1 + squash * 0.012,
+          1 - squash * 0.018,
+          1 + squash * 0.012
+        );
+      }
+
+      if (accessoryRef.current) {
+        accessoryRef.current.position.y = Math.sin(time * 3.1) * 0.012;
+        accessoryRef.current.rotation.z = Math.sin(time * 2.2) * 0.016;
+      }
+
+      if (eyeRef.current) {
+        const blinkCycle = (time + phase * 0.37) % 4.3;
+        const blinkScale = blinkCycle > 4.08 ? Math.max(0.08, Math.abs(blinkCycle - 4.19) * 9) : 1;
+        eyeRef.current.scale.y = blinkScale;
+      }
     }
   });
 
+  const limbColor = avatarType === 'Panda' ? '#111827' : config.primaryColor;
+  const shoeColor = avatarType === 'Girl' || avatarType === 'Bunny' ? config.primaryColor : '#111827';
+
   return (
     <group ref={groupRef} scale={scale}>
-      {/* Head Group - Large cute chibi head */}
-      <group ref={headRef} position={[0, 1.42, 0]}>
-        <mesh castShadow receiveShadow>
-          {avatarType === 'Robot' ? (
-            <boxGeometry args={[0.9, 0.85, 0.85]} />
-          ) : (
-            <sphereGeometry args={[0.48, 24, 24]} />
+      <group ref={visualRootRef}>
+        <group ref={headRef} position={[0, 1.47, 0]}>
+          <mesh
+            castShadow
+            receiveShadow
+            scale={
+              avatarType === 'Alien'
+                ? [0.96, 1.08, 0.92]
+                : avatarType === 'Dinosaur'
+                  ? [1.04, 0.96, 1]
+                  : [1, 1, 1]
+            }
+          >
+            {avatarType === 'Robot' ? (
+              <boxGeometry args={[0.98, 0.88, 0.84]} />
+            ) : (
+              <sphereGeometry args={[0.53, simplified ? 16 : 24, simplified ? 16 : 24]} />
+            )}
+            <meshStandardMaterial
+              color={config.primaryColor}
+              roughness={avatarType === 'Robot' ? 0.2 : 0.34}
+              metalness={avatarType === 'Robot' ? 0.62 : 0.05}
+            />
+          </mesh>
+
+          <AvatarFace
+            avatarType={avatarType}
+            primaryColor={config.primaryColor}
+            secondaryColor={config.secondaryColor}
+            accentColor={config.accentColor}
+            simplified={simplified}
+            eyeRef={eyeRef}
+          />
+          <AvatarAccessories
+            avatarType={avatarType}
+            primaryColor={config.primaryColor}
+            secondaryColor={config.secondaryColor}
+            accentColor={config.accentColor}
+            simplified={simplified}
+            accessoryRef={accessoryRef}
+          />
+        </group>
+
+        <group ref={torsoRef} position={[0, 0.68, 0]}>
+          <mesh castShadow receiveShadow>
+            <cylinderGeometry args={[0.34, 0.39, 0.66, simplified ? 12 : 20]} />
+            <meshStandardMaterial color={config.secondaryColor} roughness={0.38} />
+          </mesh>
+          <AvatarOutfit
+            avatarType={avatarType}
+            primaryColor={config.primaryColor}
+            secondaryColor={config.secondaryColor}
+            accentColor={config.accentColor}
+            simplified={simplified}
+          />
+        </group>
+
+        <group ref={leftArmRef} position={[-0.45, 0.9, 0]}>
+          <mesh position={[0, -0.19, 0]} castShadow>
+            <capsuleGeometry args={[0.105, 0.29, 4, simplified ? 8 : 12]} />
+            <meshStandardMaterial color={limbColor} roughness={0.35} />
+          </mesh>
+          {!simplified && (
+            <mesh position={[0, -0.39, 0]}>
+              <sphereGeometry args={[0.115, 12, 12]} />
+              <meshStandardMaterial color={config.accentColor} roughness={0.38} />
+            </mesh>
           )}
-          <meshStandardMaterial color={config.primaryColor} roughness={0.3} metalness={avatarType === 'Robot' ? 0.6 : 0.1} />
-        </mesh>
+        </group>
+        <group ref={rightArmRef} position={[0.45, 0.9, 0]}>
+          <mesh position={[0, -0.19, 0]} castShadow>
+            <capsuleGeometry args={[0.105, 0.29, 4, simplified ? 8 : 12]} />
+            <meshStandardMaterial color={limbColor} roughness={0.35} />
+          </mesh>
+          {!simplified && (
+            <mesh position={[0, -0.39, 0]}>
+              <sphereGeometry args={[0.115, 12, 12]} />
+              <meshStandardMaterial color={config.accentColor} roughness={0.38} />
+            </mesh>
+          )}
+        </group>
 
-        {/* Cute Eyes */}
-        <mesh position={[-0.15, 0.05, 0.44]}>
-          <sphereGeometry args={[0.06, 12, 12]} />
-          <meshBasicMaterial color="#0F172A" />
-        </mesh>
-        <mesh position={[0.15, 0.05, 0.44]}>
-          <sphereGeometry args={[0.06, 12, 12]} />
-          <meshBasicMaterial color="#0F172A" />
-        </mesh>
-        {!simplified && (
-          <>
-            {/* Eye highlights and smile */}
-            <mesh position={[-0.13, 0.07, 0.49]}>
-              <sphereGeometry args={[0.018, 8, 8]} />
-              <meshBasicMaterial color="#FFFFFF" />
+        <group ref={leftLegRef} position={[-0.19, 0.38, 0]}>
+          <mesh position={[0, -0.17, 0]} castShadow>
+            <capsuleGeometry args={[0.11, 0.25, 4, simplified ? 8 : 10]} />
+            <meshStandardMaterial color="#172033" roughness={0.45} />
+          </mesh>
+          <mesh position={[0, -0.39, 0.1]} castShadow scale={[1.08, 1, 1.08]}>
+            <boxGeometry args={[0.27, 0.16, 0.42]} />
+            <meshStandardMaterial
+              color={shoeColor}
+              emissive={config.primaryColor}
+              emissiveIntensity={simplified ? 0.14 : 0.36}
+              roughness={0.28}
+            />
+          </mesh>
+          {!simplified && (
+            <mesh position={[0, -0.39, 0.318]}>
+              <boxGeometry args={[0.21, 0.045, 0.018]} />
+              <meshBasicMaterial color={config.accentColor} toneMapped={false} />
             </mesh>
-            <mesh position={[0.17, 0.07, 0.49]}>
-              <sphereGeometry args={[0.018, 8, 8]} />
-              <meshBasicMaterial color="#FFFFFF" />
+          )}
+        </group>
+        <group ref={rightLegRef} position={[0.19, 0.38, 0]}>
+          <mesh position={[0, -0.17, 0]} castShadow>
+            <capsuleGeometry args={[0.11, 0.25, 4, simplified ? 8 : 10]} />
+            <meshStandardMaterial color="#172033" roughness={0.45} />
+          </mesh>
+          <mesh position={[0, -0.39, 0.1]} castShadow scale={[1.08, 1, 1.08]}>
+            <boxGeometry args={[0.27, 0.16, 0.42]} />
+            <meshStandardMaterial
+              color={shoeColor}
+              emissive={config.primaryColor}
+              emissiveIntensity={simplified ? 0.14 : 0.36}
+              roughness={0.28}
+            />
+          </mesh>
+          {!simplified && (
+            <mesh position={[0, -0.39, 0.318]}>
+              <boxGeometry args={[0.21, 0.045, 0.018]} />
+              <meshBasicMaterial color={config.accentColor} toneMapped={false} />
             </mesh>
-            <mesh position={[0, -0.14, 0.475]} rotation={[0, 0, Math.PI / 2]}>
-              <torusGeometry args={[0.075, 0.018, 6, 14, Math.PI]} />
-              <meshBasicMaterial color="#7F1D1D" />
-            </mesh>
-          </>
+          )}
+        </group>
+
+        {avatarType === 'Cat' && (
+          <mesh position={[0.31, 0.62, -0.35]} rotation={[0.2, 0.2, -0.55]}>
+            <torusGeometry args={[0.27, 0.055, 8, 18, Math.PI * 1.25]} />
+            <meshStandardMaterial color={config.primaryColor} roughness={0.4} />
+          </mesh>
         )}
 
-        {/* Cute Animal Ears / Accessories */}
-        {!simplified && avatarType === 'Cat' && (
-          <>
-            <mesh position={[-0.25, 0.45, 0]} rotation={[0, 0, 0.3]}>
-              <coneGeometry args={[0.16, 0.3, 16]} />
-              <meshStandardMaterial color={config.secondaryColor} />
-            </mesh>
-            <mesh position={[0.25, 0.45, 0]} rotation={[0, 0, -0.3]}>
-              <coneGeometry args={[0.16, 0.3, 16]} />
-              <meshStandardMaterial color={config.secondaryColor} />
-            </mesh>
-          </>
+        {avatarType === 'Bunny' && (
+          <mesh position={[0, 0.55, -0.38]}>
+            <sphereGeometry args={[0.18, 14, 14]} />
+            <meshStandardMaterial color={config.secondaryColor} roughness={0.55} />
+          </mesh>
         )}
-        {!simplified && avatarType === 'Bunny' && (
-          <>
-            <mesh position={[-0.2, 0.6, -0.05]}>
-              <cylinderGeometry args={[0.08, 0.09, 0.6, 12]} />
-              <meshStandardMaterial color={config.secondaryColor} />
-            </mesh>
-            <mesh position={[0.2, 0.6, -0.05]}>
-              <cylinderGeometry args={[0.08, 0.09, 0.6, 12]} />
-              <meshStandardMaterial color={config.secondaryColor} />
-            </mesh>
-          </>
-        )}
-        {!simplified && avatarType === 'Panda' && (
-          <>
-            <mesh position={[-0.35, 0.35, 0]}>
-              <sphereGeometry args={[0.16, 16, 16]} />
-              <meshStandardMaterial color="#000000" />
-            </mesh>
-            <mesh position={[0.35, 0.35, 0]}>
-              <sphereGeometry args={[0.16, 16, 16]} />
-              <meshStandardMaterial color="#000000" />
-            </mesh>
-          </>
-        )}
-        {!simplified && avatarType === 'Alien' && (
-          <>
-            <mesh position={[0, 0.6, 0]}>
-              <sphereGeometry args={[0.1, 16, 16]} />
-              <meshBasicMaterial color="#00F0FF" />
-            </mesh>
-            <mesh position={[0, 0.4, 0]}>
-              <cylinderGeometry args={[0.02, 0.02, 0.4]} />
-              <meshStandardMaterial color="#047857" />
-            </mesh>
-          </>
-        )}
-        {!simplified && avatarType === 'Robot' && (
-          <mesh position={[0, 0.55, 0]}>
-            <sphereGeometry args={[0.12, 16, 16]} />
-            <meshBasicMaterial color="#FF007F" />
+
+        {avatarType === 'Dinosaur' && (
+          <mesh position={[0, 0.52, -0.52]} rotation={[0.58, 0, 0]} scale={[1, 1.35, 1]}>
+            <coneGeometry args={[0.24, 0.76, 12]} />
+            <meshStandardMaterial color={config.primaryColor} roughness={0.42} />
           </mesh>
         )}
       </group>
-
-      {/* Body / Torso */}
-      <mesh ref={torsoRef} position={[0, 0.68, 0]} castShadow receiveShadow>
-        <cylinderGeometry args={[0.32, 0.36, 0.65, 16]} />
-        <meshStandardMaterial color={config.secondaryColor} roughness={0.4} />
-      </mesh>
-
-      {!simplified && (
-        <mesh position={[0, 0.72, 0.325]}>
-          <boxGeometry args={[0.28, 0.08, 0.035]} />
-          <meshBasicMaterial color={config.primaryColor} toneMapped={false} />
-        </mesh>
-      )}
-
-      {/* Arms - Cute chubby limbs */}
-      <group ref={leftArmRef} position={[-0.43, 0.88, 0]}>
-        <mesh position={[0, -0.2, 0]} castShadow>
-          <capsuleGeometry args={[0.09, 0.3, 4, 10]} />
-          <meshStandardMaterial color={config.primaryColor} />
-        </mesh>
-      </group>
-      <group ref={rightArmRef} position={[0.43, 0.88, 0]}>
-        <mesh position={[0, -0.2, 0]} castShadow>
-          <capsuleGeometry args={[0.09, 0.3, 4, 10]} />
-          <meshStandardMaterial color={config.primaryColor} />
-        </mesh>
-      </group>
-
-      {/* Legs - Short chibi legs */}
-      <group ref={leftLegRef} position={[-0.18, 0.38, 0]}>
-        <mesh position={[0, -0.18, 0]} castShadow>
-          <capsuleGeometry args={[0.105, 0.27, 4, 10]} />
-          <meshStandardMaterial color="#111827" roughness={0.45} />
-        </mesh>
-        <mesh position={[0, -0.4, 0.07]} castShadow>
-          <boxGeometry args={[0.24, 0.13, 0.38]} />
-          <meshStandardMaterial color="#030712" emissive={config.primaryColor} emissiveIntensity={0.32} />
-        </mesh>
-      </group>
-      <group ref={rightLegRef} position={[0.18, 0.38, 0]}>
-        <mesh position={[0, -0.18, 0]} castShadow>
-          <capsuleGeometry args={[0.105, 0.27, 4, 10]} />
-          <meshStandardMaterial color="#111827" roughness={0.45} />
-        </mesh>
-        <mesh position={[0, -0.4, 0.07]} castShadow>
-          <boxGeometry args={[0.24, 0.13, 0.38]} />
-          <meshStandardMaterial color="#030712" emissive={config.primaryColor} emissiveIntensity={0.32} />
-        </mesh>
-      </group>
-
-      {/* Dinosaur Tail */}
-      {avatarType === 'Dinosaur' && (
-        <mesh position={[0, 0.5, -0.4]} rotation={[0.4, 0, 0]}>
-          <coneGeometry args={[0.2, 0.6, 12]} />
-          <meshStandardMaterial color={config.primaryColor} />
-        </mesh>
-      )}
     </group>
   );
 };

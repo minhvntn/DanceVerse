@@ -24,7 +24,7 @@ export const CameraController: React.FC<CameraControllerProps> = ({
   
   // Player tracking refs
   const currentTarget = useRef(new THREE.Vector3(targetPosition.x, targetPosition.y + 1.2, targetPosition.z));
-  const cameraOffset = useRef(new THREE.Vector3(0, 5.0, 12.0));
+  const cameraOffset = useRef(new THREE.Vector3(0, 5.8, 13.5));
   const tempTargetVec = useRef(new THREE.Vector3());
   
   // Lerp targets for non-player modes
@@ -36,12 +36,12 @@ export const CameraController: React.FC<CameraControllerProps> = ({
 
   // Cinematic angles
   const cinematicAngles = [
-    { pos: [0, 4.5, 18], lookAt: [0, 1.2, -14] }, // Wide
-    { pos: [0, 3, -10], lookAt: [0, 1.5, -14] }, // DJ Close-up
-    { pos: [-15, 6, -2], lookAt: [0, 2, -16] }, // Side Left
-    { pos: [15, 6, -2], lookAt: [0, 2, -16] }, // Side Right
-    { pos: [0, 15, -4], lookAt: [0, 0, -14] }, // Top Down
-    { pos: [-8, 2, 5], lookAt: [8, 1.5, -10] }, // Audience Sweep
+    { pos: [0, 9.5, 30], lookAt: [0, 5.4, -18] }, // Festival-wide establishing shot
+    { pos: [0, 6.2, -6], lookAt: [0, 5.1, -20.5] }, // DJ close-up
+    { pos: [-24, 9, 2], lookAt: [0, 5.8, -19] }, // Side Left
+    { pos: [24, 9, 2], lookAt: [0, 5.8, -19] }, // Side Right
+    { pos: [0, 27, 3], lookAt: [0, 1.8, -13] }, // Festival top down
+    { pos: [-17, 4.5, 21], lookAt: [5, 4.6, -18] }, // Audience sweep
   ];
 
   // Auto-switch cinematic angles every 12 seconds
@@ -84,8 +84,8 @@ export const CameraController: React.FC<CameraControllerProps> = ({
       }
     } 
     else if (cameraMode === 'concert') {
-      desiredPos.current.set(0, 4.5, 18);
-      desiredLookAt.current.set(0, 1.2, -14);
+      desiredPos.current.set(0, 9.5, 30);
+      desiredLookAt.current.set(0, 5.4, -18);
     } 
     else if (cameraMode === 'cinematic') {
       const angle = cinematicAngles[cinematicIndex];
@@ -124,7 +124,7 @@ export const CameraController: React.FC<CameraControllerProps> = ({
           enablePan={false}
           enableZoom={true}
           minDistance={4}
-          maxDistance={22}
+          maxDistance={28}
           minPolarAngle={Math.PI / 6}
           maxPolarAngle={Math.PI / 2.05}
         />
