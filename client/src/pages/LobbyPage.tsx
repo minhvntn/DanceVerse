@@ -5,6 +5,7 @@ import { usePlayerStore } from '../stores/usePlayerStore';
 import { socketService } from '../services/socket.service';
 import { audioService } from '../services/audio.service';
 import { SOCKET_EVENTS, Room, RoomStatePayload, RoomVisibility } from '../types';
+import { applyInitialRoomState } from '../features/room-session/applyInitialRoomState';
 import {
   Users,
   Music2,
@@ -25,7 +26,7 @@ import {
 
 export const LobbyPage: React.FC = () => {
   const { roomList, setRoomList, setRoomState, targetRoomId, setTargetRoomId } = useRoomStore();
-  const { nickname, avatarType } = usePlayerStore();
+  const { nickname, avatarType, setMyPlayerId } = usePlayerStore();
   const setPageStep = useGameStore((state) => state.setPageStep);
   const setConnectionStatus = useGameStore((state) => state.setConnectionStatus);
 
@@ -62,7 +63,7 @@ export const LobbyPage: React.FC = () => {
       setJoiningId(null);
       setPasswordModalRoomId(null);
       setErrorMsg(null);
-      setRoomState(payload);
+      applyInitialRoomState(payload, { setRoomState, setMyPlayerId });
       setPageStep('game');
     };
 
@@ -103,7 +104,7 @@ export const LobbyPage: React.FC = () => {
       socket.off(SOCKET_EVENTS.ERROR, handleError);
       socket.off('host:room:created', handleRoomCreated);
     };
-  }, [setRoomList, setRoomState, setPageStep, setConnectionStatus, nickname, avatarType]);
+  }, [setRoomList, setRoomState, setMyPlayerId, setPageStep, setConnectionStatus, nickname, avatarType]);
 
   // Handle URL invite check on mount
   useEffect(() => {
