@@ -6,6 +6,7 @@ import { AvatarType, DanceAnimationType, Vector3D, SOCKET_EVENTS } from '../../t
 import { AvatarPrimitive } from '../avatars/AvatarPrimitive';
 import { socketService } from '../../services/socket.service';
 import { useRoomStore } from '../../stores/useRoomStore';
+import { getCameraRelativeMovement } from './cameraRelativeMovement';
 
 interface PlayerControllerProps {
   myPlayerId: string;
@@ -48,6 +49,8 @@ export const PlayerController: React.FC<PlayerControllerProps> = ({
   const currentAnimRef = useRef<DanceAnimationType>('Idle');
   const [emoteBubble, setEmoteBubble] = useState<string | null>(null);
   const isMusicPlaying = useRoomStore((state) => state.musicState?.status === 'playing');
+  const cameraMode = useRoomStore((state) => state.cameraMode);
+  const cameraForwardRef = useRef(new THREE.Vector3());
 
   // Key state tracking
   const keysRef = useRef<Record<string, boolean>>({});
@@ -130,10 +133,25 @@ export const PlayerController: React.FC<PlayerControllerProps> = ({
 
       const speed = (isRunning ? 11 : 6.5) * delta;
 
-      // Normalize diagonal movement
-      const length = Math.sqrt(moveX * moveX + moveZ * moveZ);
-      const nx = moveX / length;
-      const nz = moveZ / length;
+      let nx: number;
+      let nz: number;
+
+      if (cameraMode === 'player') {
+        state.camera.getWorldDirection(cameraForwardRef.current);
+        const movement = getCameraRelativeMovement(
+          moveX,
+          -moveZ,
+          cameraForwardRef.current.x,
+          cameraForwardRef.current.z
+        );
+        nx = movement.x;
+        nz = movement.z;
+      } else {
+        // Keep the existing world-relative controls in concert/cinematic modes.
+        const length = Math.hypot(moveX, moveZ);
+        nx = moveX / length;
+        nz = moveZ / length;
+      }
 
       let newX = positionRef.current.x + nx * speed;
       let newZ = positionRef.current.z + nz * speed;
