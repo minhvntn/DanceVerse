@@ -8,6 +8,7 @@ import { PlayerController } from '../controllers/PlayerController';
 import { RemotePlayer } from './RemotePlayer';
 import { CameraController } from '../camera/CameraController';
 import { Vector3D } from '../../types';
+import { getLocalPlayerLabel, selectWorldPlayers } from './playerIdentity';
 
 interface WorldSceneProps {
   activeEmote?: string;
@@ -16,13 +17,15 @@ interface WorldSceneProps {
 
 export const WorldScene: React.FC<WorldSceneProps> = ({ activeEmote, isBeatDrop = false }) => {
   const { showEffects, showNames, performanceMode } = useGameStore();
-  const { players } = useRoomStore();
+  const { players, role } = useRoomStore();
   const { nickname, avatarType, myPlayerId } = usePlayerStore();
 
   const playerPosRef = useRef<Vector3D>({ x: 0, y: 0, z: 8 });
 
-  // Separate local player from remote players & NPCs
-  const remotePlayersList = Object.values(players).filter((p) => p.id !== myPlayerId);
+  const { localPlayer, remotePlayers } = selectWorldPlayers(players, myPlayerId);
+  const localNickname = localPlayer?.nickname || nickname || 'Dancer';
+  const localAvatarType = localPlayer?.avatarType || avatarType;
+  const localLabel = getLocalPlayerLabel(localNickname, role);
 
   const shadowEnabled = performanceMode !== 'Low';
 
@@ -58,15 +61,16 @@ export const WorldScene: React.FC<WorldSceneProps> = ({ activeEmote, isBeatDrop 
         {/* Local Player with Keyboard Controller */}
         <PlayerController
           myPlayerId={myPlayerId}
-          nickname={nickname || 'Dancer'}
-          avatarType={avatarType}
+          nickname={localLabel}
+          avatarType={localAvatarType}
+          initialPosition={localPlayer?.position}
           showNames={showNames}
           playerPosRef={playerPosRef}
           activeEmote={activeEmote}
         />
 
         {/* Remote Players & NPC Dancers */}
-        {remotePlayersList.map((player) => (
+        {remotePlayers.map((player) => (
           <RemotePlayer key={player.id} player={player} showNames={showNames} localPosRef={playerPosRef} />
         ))}
 
