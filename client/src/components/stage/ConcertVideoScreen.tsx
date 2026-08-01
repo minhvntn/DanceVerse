@@ -22,8 +22,9 @@ export const ConcertVideoScreen: React.FC = () => {
     setIsFallback(true);
   }, []);
 
-  const hasVideo = musicState && musicState.currentVideoId && musicState.status !== 'idle';
+  const hasVideo = Boolean(musicState?.currentVideoId);
   const isMessageCueActive = activeStageCue?.type === 'screen';
+  const shouldShowFallback = !hasVideo || isFallback || isMessageCueActive || musicState?.status === 'idle';
 
   // Plane dimensions in 3D
   const planeWidth = 26.79;
@@ -52,41 +53,44 @@ export const ConcertVideoScreen: React.FC = () => {
     containerRef.current.style.height = `${heightPx}px`;
   });
 
-  if (!hasVideo || isFallback || isMessageCueActive) {
-    return <ConcertScreenFallback />;
-  }
-
   return (
     <>
-      <meshBasicMaterial color="#000" />
-      <Html
-        center
-        position={[0, 0, 0.01]}
-        style={{ pointerEvents: 'none' }}
-        zIndexRange={[0, 0]}
-      >
-        <div 
-          ref={containerRef}
+      {shouldShowFallback ? <ConcertScreenFallback /> : <meshBasicMaterial color="#000" />}
+
+      {hasVideo && !isFallback && (
+        <Html
+          center
+          position={[0, 0, 0.01]}
           style={{
-            backgroundColor: '#000',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            overflow: 'hidden',
-            borderRadius: '12px',
-            boxShadow: '0 0 50px rgba(0, 240, 255, 0.2)'
+            pointerEvents: 'none',
+            opacity: shouldShowFallback ? 0 : 1,
+            visibility: shouldShowFallback ? 'hidden' : 'visible'
           }}
+          zIndexRange={[0, 0]}
         >
-          <YouTubeRoomPlayer
-            videoId={musicState.currentVideoId!}
-            musicState={musicState}
-            onError={handlePlayerError}
-            volume={100}
-            isMuted={false}
-            className="w-full h-full"
-          />
-        </div>
-      </Html>
+          <div
+            ref={containerRef}
+            style={{
+              backgroundColor: '#000',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              overflow: 'hidden',
+              borderRadius: '12px',
+              boxShadow: '0 0 50px rgba(0, 240, 255, 0.2)'
+            }}
+          >
+            <YouTubeRoomPlayer
+              videoId={musicState!.currentVideoId!}
+              musicState={musicState}
+              onError={handlePlayerError}
+              volume={100}
+              isMuted={false}
+              className="w-full h-full"
+            />
+          </div>
+        </Html>
+      )}
     </>
   );
 };

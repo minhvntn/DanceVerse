@@ -1,10 +1,9 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Html } from '@react-three/drei';
 import * as THREE from 'three';
 import { AvatarType, DanceAnimationType, Vector3D, SOCKET_EVENTS } from '../../types';
 import { AvatarPrimitive } from '../avatars/AvatarPrimitive';
-import { getAutoDanceAnimation } from '../avatars/danceUtils';
 import { socketService } from '../../services/socket.service';
 import { useRoomStore } from '../../stores/useRoomStore';
 
@@ -49,10 +48,6 @@ export const PlayerController: React.FC<PlayerControllerProps> = ({
   const currentAnimRef = useRef<DanceAnimationType>('Idle');
   const [emoteBubble, setEmoteBubble] = useState<string | null>(null);
   const isMusicPlaying = useRoomStore((state) => state.musicState?.status === 'playing');
-  const autoDance = useMemo(
-    () => getAutoDanceAnimation(myPlayerId || nickname),
-    [myPlayerId, nickname]
-  );
 
   // Key state tracking
   const keysRef = useRef<Record<string, boolean>>({});
@@ -143,9 +138,9 @@ export const PlayerController: React.FC<PlayerControllerProps> = ({
       let newX = positionRef.current.x + nx * speed;
       let newZ = positionRef.current.z + nz * speed;
 
-      // Enforce stage boundaries (-36 to +36 X, -34 to +34 Z)
+      // Keep real users in the audience area, below the front edge of the stage.
       newX = Math.max(-36, Math.min(36, newX));
-      newZ = Math.max(-34, Math.min(34, newZ));
+      newZ = Math.max(-11.8, Math.min(34, newZ));
 
       positionRef.current.x = newX;
       positionRef.current.y = 0;
@@ -178,14 +173,19 @@ export const PlayerController: React.FC<PlayerControllerProps> = ({
       groupRef.current.position.set(positionRef.current.x, positionRef.current.y, positionRef.current.z);
 
       if (Date.now() >= manualOverrideUntilRef.current) {
-        applyAnimation(isMusicPlaying ? autoDance : 'Idle');
+        applyAnimation('Idle');
       }
     }
   });
 
   return (
     <group ref={groupRef} position={[initialPosition.x, initialPosition.y, initialPosition.z]}>
-      <AvatarPrimitive avatarType={avatarType} animation={currentAnim} scale={1} />
+      <AvatarPrimitive
+        avatarType={avatarType}
+        animation={currentAnim}
+        audienceMotion={isMusicPlaying && currentAnim === 'Idle'}
+        scale={1}
+      />
 
       {/* Emote Bubble */}
       {emoteBubble && (

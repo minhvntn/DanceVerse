@@ -1,11 +1,11 @@
+import { API_BASE_URL } from '../config/runtime';
+
 export class ApiError extends Error {
   constructor(public code: string, message: string) {
     super(message);
     this.name = 'ApiError';
   }
 }
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
 let getAccessToken: () => string | null = () => null;
 let setAccessToken: (token: string | null) => void = () => {};

@@ -34,15 +34,19 @@ export const WorldScene: React.FC<WorldSceneProps> = ({ activeEmote, isBeatDrop 
         className="w-full h-full"
       >
         <color attach="background" args={["#020617"]} />
-        <ambientLight intensity={0.55} />
+        <fog attach="fog" args={["#020617", 46, 92]} />
+        <ambientLight intensity={0.38} color="#B8C7FF" />
         <directionalLight
           position={[10, 20, 10]}
-          intensity={1.2}
+          intensity={1.05}
+          color="#D9E7FF"
           castShadow={shadowEnabled}
           shadow-mapSize={[1024, 1024]}
         />
-        <pointLight position={[0, 10, -10]} intensity={1.5} color="#FF007F" />
-        <pointLight position={[0, 10, 10]} intensity={1} color="#00F0FF" />
+        <pointLight position={[-18, 10, -10]} intensity={2.2} distance={44} color="#FF007F" />
+        <pointLight position={[18, 9, -8]} intensity={2.1} distance={44} color="#00F0FF" />
+        <pointLight position={[0, 15, -24]} intensity={2.5} distance={36} color="#8B5CF6" />
+        <hemisphereLight args={["#172554", "#020617", 0.55]} />
 
         {/* 3D Concert Stage and Visual Effects */}
         <ConcertArena

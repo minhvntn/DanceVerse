@@ -1,4 +1,4 @@
-import React, { useRef, useMemo, useEffect } from 'react';
+import React, { useRef, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Html } from '@react-three/drei';
 import * as THREE from 'three';
@@ -7,6 +7,8 @@ import { useRoomStore } from '../../stores/useRoomStore';
 import { ConcertVideoScreen } from '../../components/stage/ConcertVideoScreen';
 import { StageEffects } from './effects/StageEffects';
 import { DJBooth } from './DJBooth';
+import { NeonPortal } from './NeonPortal';
+import { DanceFloor } from './DanceFloor';
 
 interface ConcertArenaProps {
   showEffects: boolean;
@@ -19,8 +21,9 @@ export const ConcertArena: React.FC<ConcertArenaProps> = ({
   performanceMode,
   isBeatDrop = false
 }) => {
-  const { musicState, activeStageCue } = useRoomStore();
-  const ledScreenRef = useRef<THREE.MeshBasicMaterial>(null);
+  const musicState = useRoomStore((state) => state.musicState);
+  const activeStageCue = useRoomStore((state) => state.activeStageCue);
+  const isPlaying = musicState?.status === 'playing';
   const confettiGroupRef = useRef<THREE.Group>(null);
   const fireworksRef = useRef<THREE.Group>(null);
 
@@ -39,6 +42,22 @@ export const ConcertArena: React.FC<ConcertArenaProps> = ({
       return () => clearTimeout(timer);
     }
   }, [activeStageCue]);
+
+  React.useEffect(() => {
+    if (!isBeatDrop || performanceMode === 'Low') return;
+
+    setTriggerConfetti(true);
+    if (performanceMode === 'High' || performanceMode === 'Auto') {
+      setTriggerFireworks(true);
+    }
+
+    const confettiTimer = setTimeout(() => setTriggerConfetti(false), 3200);
+    const fireworksTimer = setTimeout(() => setTriggerFireworks(false), 2600);
+    return () => {
+      clearTimeout(confettiTimer);
+      clearTimeout(fireworksTimer);
+    };
+  }, [isBeatDrop, performanceMode]);
 
   // Determine particle density based on performance setting
   const confettiCount = useMemo(() => {
@@ -68,14 +87,6 @@ export const ConcertArena: React.FC<ConcertArenaProps> = ({
   useFrame((state) => {
     const time = state.clock.getElapsedTime();
 
-    // LED screen color pulse
-    if (ledScreenRef.current) {
-      const hue = (time * 0.08) % 1;
-      ledScreenRef.current.color.setHSL(hue, 0.85, 0.55);
-    }
-
-
-
     // Animate Confetti falling
     if (showEffects && triggerConfetti && confettiGroupRef.current) {
       confettiGroupRef.current.children.forEach((child, i) => {
@@ -99,22 +110,7 @@ export const ConcertArena: React.FC<ConcertArenaProps> = ({
   return (
     <group>
       {/* --- FLOOR AND GROUND --- */}
-      {/* Main Ground Arena Floor */}
-      <mesh position={[0, -0.05, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-        <planeGeometry args={[80, 80]} />
-        <meshStandardMaterial color="#0B0F19" roughness={0.8} />
-      </mesh>
-
-      {/* Dance Floor Grid / Stage Floor */}
-      <mesh position={[0, 0.01, -2]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-        <planeGeometry args={[34, 30]} />
-        <meshStandardMaterial color="#111827" roughness={0.3} metalness={0.4} />
-      </mesh>
-      {/* Glowing Neon Border around Dance Floor */}
-      <mesh position={[0, 0.02, -2]} rotation={[-Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[16.8, 17.3, 32]} />
-        <meshBasicMaterial color="#00F0FF" />
-      </mesh>
+      <DanceFloor isPlaying={isPlaying} performanceMode={performanceMode} />
 
       {/* --- MAIN STAGE & DJ BOOTH --- */}
       {/* Stage Platform */}
@@ -131,6 +127,13 @@ export const ConcertArena: React.FC<ConcertArenaProps> = ({
 
       {/* DJ Booth */}
       <DJBooth />
+
+      {/* Neon portal, truss and marquee behind the video wall. */}
+      <NeonPortal
+        isPlaying={isPlaying}
+        isBeatDrop={isBeatDrop}
+        performanceMode={performanceMode}
+      />
 
       {/* --- GIANT MAIN LED SCREEN --- */}
       <mesh position={[0, 8.5, -22.5]}>
@@ -226,7 +229,7 @@ export const ConcertArena: React.FC<ConcertArenaProps> = ({
           )}
 
           {/* Simple Fireworks Rings */}
-          {triggerFireworks && (
+          {triggerFireworks && (performanceMode === 'High' || performanceMode === 'Auto' || isBeatDrop) && (
             <group ref={fireworksRef} position={[0, 15, -20]}>
             <mesh position={[-8, 3, 0]}>
               <ringGeometry args={[2.5, 3, 16]} />
@@ -245,11 +248,6 @@ export const ConcertArena: React.FC<ConcertArenaProps> = ({
         </>
       )}
 
-      {/* --- AUDIENCE BOUNDARY ARCHES --- */}
-      <mesh position={[0, 6, -26]}>
-        <torusGeometry args={[28, 0.6, 16, 32, Math.PI]} />
-        <meshBasicMaterial color="#9D00FF" />
-      </mesh>
     </group>
   );
 };

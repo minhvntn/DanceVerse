@@ -1,5 +1,6 @@
 import express from 'express';
 import http from 'http';
+import path from 'path';
 import { Server, Socket } from 'socket.io';
 import { createAdapter } from '@socket.io/redis-adapter';
 import Redis from 'ioredis';
@@ -26,7 +27,7 @@ import { AutoDjService } from './autoDj/autoDj.service';
 dotenv.config();
 
 const PORT = parseInt(process.env.PORT || '3001', 10);
-const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173';
+const CLIENT_URL = process.env.CLIENT_URL || process.env.RENDER_EXTERNAL_URL || 'http://localhost:5173';
 
 const app = express();
 app.use(cors({ origin: CLIENT_URL, credentials: true }));
@@ -42,27 +43,29 @@ const io = new Server(server, {
   }
 });
 
-// Setup Redis Adapter for multi-server scaling
-const redisHost = process.env.REDIS_HOST || 'localhost';
-const redisPort = parseInt(process.env.REDIS_PORT || '6379', 10);
-const pubClient = new Redis(redisPort, redisHost, {
-  maxRetriesPerRequest: null,
-  retryStrategy: (times) => {
-    if (times > 3) {
-      console.warn('[Redis] Could not connect to Redis. Running without multi-server sync.');
-      return null;
+// Redis is optional for the single-instance free deployment.
+if (process.env.REDIS_DISABLED !== 'true') {
+  const redisHost = process.env.REDIS_HOST || 'localhost';
+  const redisPort = parseInt(process.env.REDIS_PORT || '6379', 10);
+  const pubClient = new Redis(redisPort, redisHost, {
+    maxRetriesPerRequest: null,
+    retryStrategy: (times) => {
+      if (times > 3) {
+        console.warn('[Redis] Could not connect to Redis. Running without multi-server sync.');
+        return null;
+      }
+      return Math.min(times * 100, 2000);
     }
-    return Math.min(times * 100, 2000);
-  }
-});
-const subClient = pubClient.duplicate();
+  });
+  const subClient = pubClient.duplicate();
 
-Promise.all([pubClient.connect().catch(() => {}), subClient.connect().catch(() => {})]).then(() => {
-  if (pubClient.status === 'ready') {
-    io.adapter(createAdapter(pubClient, subClient));
-    console.log('[Redis] Socket.IO Redis Adapter initialized.');
-  }
-});
+  Promise.all([pubClient.connect().catch(() => {}), subClient.connect().catch(() => {})]).then(() => {
+    if (pubClient.status === 'ready') {
+      io.adapter(createAdapter(pubClient, subClient));
+      console.log('[Redis] Socket.IO Redis Adapter initialized.');
+    }
+  });
+}
 
 // Initialize Managers & Services
 RoomManager.initialize();
@@ -152,6 +155,18 @@ setInterval(() => {
     });
   });
 }, 10000);
+
+if (process.env.NODE_ENV === 'production') {
+  const clientDistPath = path.resolve(__dirname, '../../../../client/dist');
+  app.use(express.static(clientDistPath));
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api/') || req.path.startsWith('/socket.io/')) {
+      next();
+      return;
+    }
+    res.sendFile(path.join(clientDistPath, 'index.html'));
+  });
+}
 
 server.listen(PORT, () => {
   console.log(`[Server] DanceVerse Live Server running on http://localhost:${PORT}`);

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useAuthStore } from '../stores/useAuthStore';
 import { useGameStore } from '../stores/useGameStore';
 import { LogIn, ArrowLeft } from 'lucide-react';
+import { getOAuthUrl } from '../config/runtime';
 
 export const LoginPage: React.FC = () => {
   const [identifier, setIdentifier] = useState('');
@@ -40,7 +41,7 @@ export const LoginPage: React.FC = () => {
 
         <div className="w-full flex flex-col gap-3 mb-6">
           <button
-            onClick={() => window.location.assign('http://localhost:3001/api/auth/oauth/google?returnTo=/')}
+            onClick={() => window.location.assign(getOAuthUrl('google'))}
             className="w-full py-3 bg-white hover:bg-slate-100 text-slate-900 font-bold rounded-xl shadow transition-all transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2"
           >
             <svg className="w-5 h-5" viewBox="0 0 24 24">
@@ -54,7 +55,7 @@ export const LoginPage: React.FC = () => {
           </button>
           
           <button
-            onClick={() => window.location.assign('http://localhost:3001/api/auth/oauth/facebook?returnTo=/')}
+            onClick={() => window.location.assign(getOAuthUrl('facebook'))}
             className="w-full py-3 bg-[#1877F2] hover:bg-[#1864D9] text-white font-bold rounded-xl shadow transition-all transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2"
           >
             <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">

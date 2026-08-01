@@ -30,7 +30,7 @@ export class RoomManager {
     initialRooms.forEach((config) => {
       const playlist = MusicService.getPlaylist(config.id);
       const { musicState } = MusicService.getInitialMusicState(playlist, config.id);
-      const npcs = NpcController.generateNpcsForRoom(config.id, 3);
+      const npcs = NpcController.generateNpcsForRoom(config.id, 5);
       const playerMap = new Map<string, Player>();
       const leaderboardMap = new Map<string, LeaderboardEntry>();
 
@@ -99,14 +99,22 @@ export class RoomManager {
 
     const playlist: PlaylistItem[] = [];
     const { musicState } = MusicService.getInitialMusicState(playlist, roomId);
+    const npcs = NpcController.generateNpcsForRoom(roomId, 5);
+    const playerMap = new Map<string, Player>();
+    const leaderboardMap = new Map<string, LeaderboardEntry>();
+
+    npcs.forEach((npc) => {
+      playerMap.set(npc.id, npc);
+      leaderboardMap.set(npc.id, { nickname: npc.nickname, score: npc.score || 0 });
+    });
 
     this.instances.set(roomId, {
       room,
-      players: new Map(),
+      players: playerMap,
       playlist,
       currentTrackIndex: 0,
       musicState,
-      leaderboard: new Map(),
+      leaderboard: leaderboardMap,
       hostId: payload.hostId,
       hostTokenHash,
       passwordHash,

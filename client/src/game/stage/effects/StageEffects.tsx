@@ -5,7 +5,6 @@ import { MovingLights } from './MovingLights';
 import { StageLasers } from './StageLasers';
 import { StageSmoke } from './StageSmoke';
 import { CO2Cannon } from './CO2Cannon';
-import { useFrame } from '@react-three/fiber';
 
 interface StageEffectsProps {
   performanceMode: PerformanceMode;
@@ -57,6 +56,13 @@ export const StageEffects: React.FC<StageEffectsProps> = ({ performanceMode, isB
       }
     }
   }, [musicState?.currentVideoId, musicState?.status, prevVideoId]);
+
+  useEffect(() => {
+    if (!isBeatDrop || performanceMode === 'Low') return;
+    setTriggerCO2(true);
+    const timer = setTimeout(() => setTriggerCO2(false), 1800);
+    return () => clearTimeout(timer);
+  }, [isBeatDrop, performanceMode]);
 
   return (
     <group>

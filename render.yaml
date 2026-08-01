@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: danceverse-live
+    runtime: node
+    plan: free
+    buildCommand: npm ci && npm ci --prefix client && npm ci --prefix server && npm run build && cd server && npx prisma migrate deploy
+    startCommand: node server/dist/server/src/index.js
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: 20.18.0
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: REDIS_DISABLED
+        value: "true"
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+      - key: OAUTH_STATE_SECRET
+        generateValue: true
+      - key: MAX_PLAYERS_PER_ROOM
+        value: "50"

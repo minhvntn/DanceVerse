@@ -1,8 +1,7 @@
 import { io, Socket } from 'socket.io-client';
 import { SOCKET_EVENTS } from '../types';
 import { useAuthStore } from '../stores/useAuthStore';
-
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001';
+import { SOCKET_URL } from '../config/runtime';
 
 class SocketService {
   private socket: Socket | null = null;

@@ -40,7 +40,10 @@ export const YouTubeRoomPlayer: React.FC<YouTubeRoomPlayerProps> = ({
   const musicStateRef = useRef<MusicState | null | undefined>(musicState);
   const videoIdRef = useRef<string | null | undefined>(videoId);
   const hasEndedRef = useRef<boolean>(false);
-  const onErrorRef = useRef(onError);
+  const volumeRef = useRef(volume);
+  const isMutedRef = useRef(isMuted);
+  const onPlayerReadyRef = useRef(onPlayerReady);
+  const onErrorCallbackRef = useRef(onError);
 
   // Keep refs in sync with props
   useEffect(() => {
@@ -52,8 +55,11 @@ export const YouTubeRoomPlayer: React.FC<YouTubeRoomPlayerProps> = ({
   }, [videoId]);
 
   useEffect(() => {
-    onErrorRef.current = onError;
-  }, [onError]);
+    volumeRef.current = volume;
+    isMutedRef.current = isMuted;
+    onPlayerReadyRef.current = onPlayerReady;
+    onErrorCallbackRef.current = onError;
+  }, [volume, isMuted, onPlayerReady, onError]);
 
   // Load YouTube IFrame API script
   useEffect(() => {
@@ -138,8 +144,17 @@ export const YouTubeRoomPlayer: React.FC<YouTubeRoomPlayerProps> = ({
     const msg = errorMessages[errorCode] || `YouTube error (code ${errorCode})`;
     console.warn('[YouTubePlayer] Error:', msg);
     setPlayerError(msg);
-    onErrorRef.current?.();
+    onErrorCallbackRef.current?.();
   }, []);
+
+  // Prop callback identity and room-state updates must never recreate the iframe.
+  const stateChangeHandlerRef = useRef(handleStateChange);
+  const playerErrorHandlerRef = useRef(handleError);
+
+  useEffect(() => {
+    stateChangeHandlerRef.current = handleStateChange;
+    playerErrorHandlerRef.current = handleError;
+  }, [handleStateChange, handleError]);
 
   // Initialize YT.Player once API is loaded and container is mounted
   useEffect(() => {
@@ -148,7 +163,7 @@ export const YouTubeRoomPlayer: React.FC<YouTubeRoomPlayerProps> = ({
     playerRef.current = new window.YT.Player(containerRef.current, {
       height: '100%',
       width: '100%',
-      videoId: videoId || undefined,
+      videoId: videoIdRef.current || undefined,
       playerVars: {
         autoplay: 1,
         controls: 0,
@@ -163,12 +178,14 @@ export const YouTubeRoomPlayer: React.FC<YouTubeRoomPlayerProps> = ({
       events: {
         onReady: (event: any) => {
           setIsReady(true);
-          event.target.setVolume(isMuted ? 0 : Math.max(0, Math.min(100, volume)));
-          if (onPlayerReady) onPlayerReady();
+          event.target.setVolume(
+            isMutedRef.current ? 0 : Math.max(0, Math.min(100, volumeRef.current))
+          );
+          onPlayerReadyRef.current?.();
           event.target.playVideo();
         },
-        onStateChange: handleStateChange,
-        onError: handleError
+        onStateChange: (event: any) => stateChangeHandlerRef.current(event),
+        onError: (event: any) => playerErrorHandlerRef.current(event)
       }
     });
 
@@ -179,7 +196,7 @@ export const YouTubeRoomPlayer: React.FC<YouTubeRoomPlayerProps> = ({
         playerRef.current = null;
       }
     };
-  }, [isApiLoaded, handleStateChange, handleError]);
+  }, [isApiLoaded]);
 
   // Update videoId when track changes
   useEffect(() => {
@@ -274,6 +291,9 @@ export const YouTubeRoomPlayer: React.FC<YouTubeRoomPlayerProps> = ({
       if (state === 1) {
         playerRef.current.pauseVideo();
       }
+    } else if (musicState.status === 'idle' && state === 1) {
+      // Preserve the player through transient idle updates without leaking audio.
+      playerRef.current.pauseVideo();
     }
   }, [musicState?.status, musicState?.currentVideoId, musicState?.revision, isReady]);
 

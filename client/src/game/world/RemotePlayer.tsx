@@ -21,9 +21,12 @@ export const RemotePlayer: React.FC<RemotePlayerProps> = ({ player, showNames, l
   const [isDistant, setIsDistant] = useState(false);
   const isMusicPlaying = useRoomStore((state) => state.musicState?.status === 'playing');
   const playerAnimation = player.animation || 'Idle';
-  const visibleAnimation = isMusicPlaying && playerAnimation === 'Idle'
-    ? getAutoDanceAnimation(player.id)
+  const visibleAnimation = player.isNpc
+    ? (isMusicPlaying
+      ? (playerAnimation === 'Idle' ? getAutoDanceAnimation(player.id) : playerAnimation)
+      : 'Idle')
     : playerAnimation;
+  const audienceMotion = !player.isNpc && isMusicPlaying && visibleAnimation === 'Idle';
 
   useEffect(() => {
     targetPos.current.set(player.position.x, player.position.y, player.position.z);
@@ -53,8 +56,10 @@ export const RemotePlayer: React.FC<RemotePlayerProps> = ({ player, showNames, l
     while (diff > Math.PI) diff -= Math.PI * 2;
     groupRef.current.rotation.y += diff * 0.18;
 
-    // Distance check for crowd rendering (30 units)
-    if (localPosRef.current) {
+    // Stage performers remain fully rendered from every audience position.
+    if (player.isNpc) {
+      if (isDistant) setIsDistant(false);
+    } else if (localPosRef.current) {
       const dx = groupRef.current.position.x - localPosRef.current.x;
       const dz = groupRef.current.position.z - localPosRef.current.z;
       const distSq = dx * dx + dz * dz;
@@ -77,6 +82,7 @@ export const RemotePlayer: React.FC<RemotePlayerProps> = ({ player, showNames, l
           <AvatarPrimitive
             avatarType={player.avatarType}
             animation={visibleAnimation}
+            audienceMotion={audienceMotion}
             scale={1}
             phase={(player.id.length % 7) * 0.45}
           />

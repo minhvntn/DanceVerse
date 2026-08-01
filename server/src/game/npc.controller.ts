@@ -22,12 +22,17 @@ export class NpcController {
 
   public static generateNpcsForRoom(roomId: string, count: number): Player[] {
     const npcs: Player[] = [];
-    const radius = 8;
+    const stageSlots = [
+      { x: -9, z: -17.2 },
+      { x: -4.5, z: -18.1 },
+      { x: 0, z: -17.4 },
+      { x: 4.5, z: -18.1 },
+      { x: 9, z: -17.2 }
+    ];
+
     for (let i = 0; i < count; i++) {
       const template = this.npcTemplates[i % this.npcTemplates.length];
-      const angle = (i / count) * Math.PI * 2;
-      const x = Math.cos(angle) * radius;
-      const z = Math.sin(angle) * radius - 5; // near front stage
+      const slot = stageSlots[i % stageSlots.length];
       const randomAnim = this.animations[Math.floor(Math.random() * this.animations.length)];
 
       npcs.push({
@@ -35,8 +40,8 @@ export class NpcController {
         nickname: `${template.nickname} [NPC]`,
         avatarType: template.avatarType,
         roomId,
-        position: { x, y: 0, z },
-        rotation: Math.PI, // facing audience
+        position: { x: slot.x, y: 1.5, z: slot.z },
+        rotation: 0, // avatars face +Z toward the audience
         animation: randomAnim,
         isNpc: true,
         score: Math.floor(Math.random() * 8000) + 4000

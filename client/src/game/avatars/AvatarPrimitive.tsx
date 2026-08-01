@@ -11,6 +11,9 @@ interface AvatarPrimitiveProps {
   nickname?: string;
   showName?: boolean;
   emote?: string;
+  phase?: number;
+  simplified?: boolean;
+  audienceMotion?: boolean;
 }
 
 export const AVATAR_CONFIGS: Record<AvatarType, {
@@ -76,77 +79,179 @@ export const AvatarPrimitive: React.FC<AvatarPrimitiveProps> = ({
   scale = 1,
   nickname,
   showName = true,
-  emote
+  emote,
+  phase = 0,
+  simplified = false,
+  audienceMotion = false
 }) => {
   const groupRef = useRef<THREE.Group>(null);
   const headRef = useRef<THREE.Group>(null);
-  const leftArmRef = useRef<THREE.Mesh>(null);
-  const rightArmRef = useRef<THREE.Mesh>(null);
-  const leftLegRef = useRef<THREE.Mesh>(null);
-  const rightLegRef = useRef<THREE.Mesh>(null);
+  const torsoRef = useRef<THREE.Mesh>(null);
+  const leftArmRef = useRef<THREE.Group>(null);
+  const rightArmRef = useRef<THREE.Group>(null);
+  const leftLegRef = useRef<THREE.Group>(null);
+  const rightLegRef = useRef<THREE.Group>(null);
 
   const config = AVATAR_CONFIGS[avatarType] || AVATAR_CONFIGS.Boy;
 
   useFrame((state) => {
-    const time = state.clock.getElapsedTime();
+    const time = state.clock.getElapsedTime() + phase;
 
     if (isPreview && groupRef.current) {
       groupRef.current.rotation.y = time * 0.8;
     }
 
     // Procedural math animations
-    if (leftArmRef.current && rightArmRef.current && leftLegRef.current && rightLegRef.current && headRef.current) {
+    if (
+      groupRef.current &&
+      torsoRef.current &&
+      leftArmRef.current &&
+      rightArmRef.current &&
+      leftLegRef.current &&
+      rightLegRef.current &&
+      headRef.current
+    ) {
+      const group = groupRef.current;
+      const torso = torsoRef.current;
+      const head = headRef.current;
+      const leftArm = leftArmRef.current;
+      const rightArm = rightArmRef.current;
+      const leftLeg = leftLegRef.current;
+      const rightLeg = rightLegRef.current;
+
+      group.position.set(0, 0, 0);
+      group.rotation.x = 0;
+      group.rotation.z = 0;
+      if (!isPreview) group.rotation.y = 0;
+
+      torso.position.y = 0.68;
+      torso.rotation.set(0, 0, 0);
+      torso.scale.set(1, 1, 1);
+      head.position.set(0, 1.42, 0);
+      head.rotation.set(0, 0, 0);
+      leftArm.rotation.set(0, 0, 0.12);
+      rightArm.rotation.set(0, 0, -0.12);
+      leftLeg.rotation.set(0, 0, 0);
+      rightLeg.rotation.set(0, 0, 0);
+
       if (animation === 'Idle') {
-        leftArmRef.current.rotation.x = Math.sin(time * 3) * 0.15;
-        rightArmRef.current.rotation.x = -Math.sin(time * 3) * 0.15;
-        headRef.current.position.y = 1.35 + Math.sin(time * 3) * 0.05;
+        if (audienceMotion) {
+          const sway = Math.sin(time * 2.1);
+          const bounce = Math.abs(Math.sin(time * 2.1));
+          const leftLift = 0.5 + Math.sin(time * 1.35) * 0.5;
+          const rightLift = 1 - leftLift;
+
+          group.position.y = bounce * 0.07;
+          torso.rotation.z = sway * 0.075;
+          head.rotation.z = -sway * 0.06;
+          head.position.y += bounce * 0.025;
+          leftArm.rotation.x = sway * 0.18;
+          rightArm.rotation.x = -sway * 0.18;
+          leftArm.rotation.z = 0.12 - leftLift * 0.72;
+          rightArm.rotation.z = -0.12 + rightLift * 0.72;
+          leftLeg.rotation.z = -sway * 0.035;
+          rightLeg.rotation.z = sway * 0.035;
+        } else {
+          const breathe = Math.sin(time * 2.6);
+          leftArm.rotation.x = breathe * 0.12;
+          rightArm.rotation.x = -breathe * 0.12;
+          head.position.y += breathe * 0.035;
+          torso.scale.y = 1 + breathe * 0.025;
+        }
       } else if (animation === 'Walk' || animation === 'Run') {
         const speed = animation === 'Run' ? 12 : 7;
-        leftArmRef.current.rotation.x = Math.sin(time * speed) * 0.6;
-        rightArmRef.current.rotation.x = -Math.sin(time * speed) * 0.6;
-        leftLegRef.current.rotation.x = -Math.sin(time * speed) * 0.6;
-        rightLegRef.current.rotation.x = Math.sin(time * speed) * 0.6;
+        const stride = Math.sin(time * speed);
+        leftArm.rotation.x = stride * 0.75;
+        rightArm.rotation.x = -stride * 0.75;
+        leftLeg.rotation.x = -stride * 0.65;
+        rightLeg.rotation.x = stride * 0.65;
+        group.position.y = Math.abs(Math.cos(time * speed)) * 0.06;
+        torso.rotation.z = stride * 0.06;
       } else if (animation === 'Jump') {
-        if (groupRef.current && !isPreview) {
-          groupRef.current.position.y = Math.abs(Math.sin(time * 6)) * 1.5;
-        }
-        leftArmRef.current.rotation.z = Math.PI - 0.5;
-        rightArmRef.current.rotation.z = -(Math.PI - 0.5);
+        if (!isPreview) group.position.y = Math.abs(Math.sin(time * 6)) * 1.25;
+        leftArm.rotation.z = -2.45;
+        rightArm.rotation.z = 2.45;
+        leftLeg.rotation.x = 0.35;
+        rightLeg.rotation.x = 0.35;
       } else if (animation === 'Wave') {
-        rightArmRef.current.rotation.z = Math.PI - 0.3 + Math.sin(time * 8) * 0.3;
-        leftArmRef.current.rotation.z = 0.2;
+        rightArm.rotation.z = 2.45 + Math.sin(time * 8) * 0.3;
+        leftArm.rotation.z = 0.2;
+        head.rotation.z = Math.sin(time * 3) * 0.08;
       } else if (animation === 'HipHop') {
-        headRef.current.rotation.z = Math.sin(time * 6) * 0.2;
-        leftArmRef.current.rotation.x = Math.sin(time * 6) * 0.8;
-        rightArmRef.current.rotation.x = Math.cos(time * 6) * 0.8;
-        if (groupRef.current && !isPreview) {
-          groupRef.current.position.y = Math.abs(Math.sin(time * 6)) * 0.4;
-        }
+        const beat = Math.sin(time * 6.2);
+        head.rotation.z = beat * 0.18;
+        torso.rotation.y = beat * 0.18;
+        torso.rotation.z = beat * 0.1;
+        leftArm.rotation.x = beat * 1.0;
+        leftArm.rotation.z = 0.55;
+        rightArm.rotation.x = Math.cos(time * 6.2) * 1.0;
+        rightArm.rotation.z = -0.55;
+        leftLeg.rotation.z = -beat * 0.18;
+        rightLeg.rotation.z = beat * 0.18;
+        if (!isPreview) group.position.y = Math.abs(beat) * 0.28;
+      } else if (animation === 'Shuffle') {
+        const step = Math.sin(time * 8);
+        group.position.x = step * 0.16;
+        group.position.y = Math.abs(Math.cos(time * 8)) * 0.13;
+        torso.rotation.z = -step * 0.14;
+        head.rotation.y = step * 0.16;
+        leftArm.rotation.x = -step * 0.65;
+        rightArm.rotation.x = step * 0.65;
+        leftLeg.rotation.z = step * 0.34;
+        rightLeg.rotation.z = -step * 0.34;
+      } else if (animation === 'Cheer') {
+        const bounce = Math.abs(Math.sin(time * 5.2));
+        group.position.y = bounce * 0.34;
+        leftArm.rotation.z = -2.45 + Math.sin(time * 5.2) * 0.14;
+        rightArm.rotation.z = 2.45 - Math.sin(time * 5.2) * 0.14;
+        leftLeg.rotation.z = -0.16;
+        rightLeg.rotation.z = 0.16;
+        head.rotation.x = -0.1;
+      } else if (animation === 'RandomDance') {
+        const beat = Math.sin(time * 7.2);
+        const sway = Math.sin(time * 3.6);
+        group.position.y = Math.abs(beat) * 0.22;
+        group.rotation.y = !isPreview ? sway * 0.3 : group.rotation.y;
+        torso.rotation.z = sway * 0.22;
+        head.rotation.z = -sway * 0.2;
+        leftArm.rotation.set(beat * 0.7, 0, 0.9 + sway * 0.45);
+        rightArm.rotation.set(-beat * 0.7, 0, -0.9 + sway * 0.45);
+        leftLeg.rotation.x = -beat * 0.45;
+        rightLeg.rotation.x = beat * 0.45;
       } else if (animation === 'Spin') {
-        if (groupRef.current && !isPreview) {
-          groupRef.current.rotation.y = time * 8;
-        }
-        leftArmRef.current.rotation.z = 1.2;
-        rightArmRef.current.rotation.z = -1.2;
+        if (!isPreview) group.rotation.y = time * 8;
+        leftArm.rotation.z = 1.2;
+        rightArm.rotation.z = -1.2;
       } else if (animation === 'Breakdance') {
-        if (groupRef.current && !isPreview) {
-          groupRef.current.rotation.z = Math.sin(time * 4) * 0.4;
-          groupRef.current.rotation.y = time * 6;
-          groupRef.current.position.y = 0.2;
+        if (!isPreview) {
+          group.rotation.z = Math.sin(time * 4) * 0.55;
+          group.rotation.y = time * 6;
+          group.position.y = 0.18;
         }
+        leftArm.rotation.z = 1.15;
+        rightArm.rotation.z = -1.15;
       } else if (animation === 'Clap') {
-        leftArmRef.current.rotation.z = 0.6 + Math.sin(time * 10) * 0.2;
-        rightArmRef.current.rotation.z = -0.6 - Math.sin(time * 10) * 0.2;
+        const clap = Math.abs(Math.sin(time * 10));
+        leftArm.rotation.z = 0.35 + clap * 0.5;
+        rightArm.rotation.z = -0.35 - clap * 0.5;
+        leftArm.rotation.x = -0.45;
+        rightArm.rotation.x = -0.45;
+        head.position.y += clap * 0.05;
+      } else if (animation === 'Moonwalk') {
+        const glide = Math.sin(time * 5.5);
+        group.position.x = glide * 0.2;
+        torso.rotation.z = -glide * 0.12;
+        leftArm.rotation.x = glide * 0.7;
+        rightArm.rotation.x = -glide * 0.7;
+        leftLeg.rotation.x = -Math.max(0, glide) * 0.6;
+        rightLeg.rotation.x = Math.min(0, glide) * 0.6;
       } else {
-        // Shuffle / Cheer / Moonwalk / RandomDance fallback
         const pulse = Math.sin(time * 7);
-        leftArmRef.current.rotation.x = pulse * 0.7;
-        rightArmRef.current.rotation.x = -pulse * 0.7;
-        leftLegRef.current.rotation.x = -pulse * 0.5;
-        rightLegRef.current.rotation.x = pulse * 0.5;
-        if (groupRef.current && !isPreview) {
-          groupRef.current.position.y = Math.abs(Math.sin(time * 7)) * 0.3;
-        }
+        leftArm.rotation.x = pulse * 0.7;
+        rightArm.rotation.x = -pulse * 0.7;
+        leftLeg.rotation.x = -pulse * 0.5;
+        rightLeg.rotation.x = pulse * 0.5;
+        if (!isPreview) group.position.y = Math.abs(pulse) * 0.25;
       }
     }
   });
@@ -154,7 +259,7 @@ export const AvatarPrimitive: React.FC<AvatarPrimitiveProps> = ({
   return (
     <group ref={groupRef} scale={scale}>
       {/* Head Group - Large cute chibi head */}
-      <group ref={headRef} position={[0, 1.35, 0]}>
+      <group ref={headRef} position={[0, 1.42, 0]}>
         <mesh castShadow receiveShadow>
           {avatarType === 'Robot' ? (
             <boxGeometry args={[0.9, 0.85, 0.85]} />
@@ -173,18 +278,26 @@ export const AvatarPrimitive: React.FC<AvatarPrimitiveProps> = ({
           <sphereGeometry args={[0.06, 12, 12]} />
           <meshBasicMaterial color="#0F172A" />
         </mesh>
-        {/* Eye highlights */}
-        <mesh position={[-0.13, 0.07, 0.49]}>
-          <sphereGeometry args={[0.018, 8, 8]} />
-          <meshBasicMaterial color="#FFFFFF" />
-        </mesh>
-        <mesh position={[0.17, 0.07, 0.49]}>
-          <sphereGeometry args={[0.018, 8, 8]} />
-          <meshBasicMaterial color="#FFFFFF" />
-        </mesh>
+        {!simplified && (
+          <>
+            {/* Eye highlights and smile */}
+            <mesh position={[-0.13, 0.07, 0.49]}>
+              <sphereGeometry args={[0.018, 8, 8]} />
+              <meshBasicMaterial color="#FFFFFF" />
+            </mesh>
+            <mesh position={[0.17, 0.07, 0.49]}>
+              <sphereGeometry args={[0.018, 8, 8]} />
+              <meshBasicMaterial color="#FFFFFF" />
+            </mesh>
+            <mesh position={[0, -0.14, 0.475]} rotation={[0, 0, Math.PI / 2]}>
+              <torusGeometry args={[0.075, 0.018, 6, 14, Math.PI]} />
+              <meshBasicMaterial color="#7F1D1D" />
+            </mesh>
+          </>
+        )}
 
         {/* Cute Animal Ears / Accessories */}
-        {avatarType === 'Cat' && (
+        {!simplified && avatarType === 'Cat' && (
           <>
             <mesh position={[-0.25, 0.45, 0]} rotation={[0, 0, 0.3]}>
               <coneGeometry args={[0.16, 0.3, 16]} />
@@ -196,7 +309,7 @@ export const AvatarPrimitive: React.FC<AvatarPrimitiveProps> = ({
             </mesh>
           </>
         )}
-        {avatarType === 'Bunny' && (
+        {!simplified && avatarType === 'Bunny' && (
           <>
             <mesh position={[-0.2, 0.6, -0.05]}>
               <cylinderGeometry args={[0.08, 0.09, 0.6, 12]} />
@@ -208,7 +321,7 @@ export const AvatarPrimitive: React.FC<AvatarPrimitiveProps> = ({
             </mesh>
           </>
         )}
-        {avatarType === 'Panda' && (
+        {!simplified && avatarType === 'Panda' && (
           <>
             <mesh position={[-0.35, 0.35, 0]}>
               <sphereGeometry args={[0.16, 16, 16]} />
@@ -220,7 +333,7 @@ export const AvatarPrimitive: React.FC<AvatarPrimitiveProps> = ({
             </mesh>
           </>
         )}
-        {avatarType === 'Alien' && (
+        {!simplified && avatarType === 'Alien' && (
           <>
             <mesh position={[0, 0.6, 0]}>
               <sphereGeometry args={[0.1, 16, 16]} />
@@ -232,7 +345,7 @@ export const AvatarPrimitive: React.FC<AvatarPrimitiveProps> = ({
             </mesh>
           </>
         )}
-        {avatarType === 'Robot' && (
+        {!simplified && avatarType === 'Robot' && (
           <mesh position={[0, 0.55, 0]}>
             <sphereGeometry args={[0.12, 16, 16]} />
             <meshBasicMaterial color="#FF007F" />
@@ -241,30 +354,53 @@ export const AvatarPrimitive: React.FC<AvatarPrimitiveProps> = ({
       </group>
 
       {/* Body / Torso */}
-      <mesh position={[0, 0.65, 0]} castShadow receiveShadow>
+      <mesh ref={torsoRef} position={[0, 0.68, 0]} castShadow receiveShadow>
         <cylinderGeometry args={[0.32, 0.36, 0.65, 16]} />
         <meshStandardMaterial color={config.secondaryColor} roughness={0.4} />
       </mesh>
 
+      {!simplified && (
+        <mesh position={[0, 0.72, 0.325]}>
+          <boxGeometry args={[0.28, 0.08, 0.035]} />
+          <meshBasicMaterial color={config.primaryColor} toneMapped={false} />
+        </mesh>
+      )}
+
       {/* Arms - Cute chubby limbs */}
-      <mesh ref={leftArmRef} position={[-0.45, 0.75, 0]} castShadow>
-        <cylinderGeometry args={[0.09, 0.09, 0.45, 12]} />
-        <meshStandardMaterial color={config.primaryColor} />
-      </mesh>
-      <mesh ref={rightArmRef} position={[0.45, 0.75, 0]} castShadow>
-        <cylinderGeometry args={[0.09, 0.09, 0.45, 12]} />
-        <meshStandardMaterial color={config.primaryColor} />
-      </mesh>
+      <group ref={leftArmRef} position={[-0.43, 0.88, 0]}>
+        <mesh position={[0, -0.2, 0]} castShadow>
+          <capsuleGeometry args={[0.09, 0.3, 4, 10]} />
+          <meshStandardMaterial color={config.primaryColor} />
+        </mesh>
+      </group>
+      <group ref={rightArmRef} position={[0.43, 0.88, 0]}>
+        <mesh position={[0, -0.2, 0]} castShadow>
+          <capsuleGeometry args={[0.09, 0.3, 4, 10]} />
+          <meshStandardMaterial color={config.primaryColor} />
+        </mesh>
+      </group>
 
       {/* Legs - Short chibi legs */}
-      <mesh ref={leftLegRef} position={[-0.18, 0.22, 0]} castShadow>
-        <cylinderGeometry args={[0.11, 0.11, 0.44, 12]} />
-        <meshStandardMaterial color="#1E293B" />
-      </mesh>
-      <mesh ref={rightLegRef} position={[0.18, 0.22, 0]} castShadow>
-        <cylinderGeometry args={[0.11, 0.11, 0.44, 12]} />
-        <meshStandardMaterial color="#1E293B" />
-      </mesh>
+      <group ref={leftLegRef} position={[-0.18, 0.38, 0]}>
+        <mesh position={[0, -0.18, 0]} castShadow>
+          <capsuleGeometry args={[0.105, 0.27, 4, 10]} />
+          <meshStandardMaterial color="#111827" roughness={0.45} />
+        </mesh>
+        <mesh position={[0, -0.4, 0.07]} castShadow>
+          <boxGeometry args={[0.24, 0.13, 0.38]} />
+          <meshStandardMaterial color="#030712" emissive={config.primaryColor} emissiveIntensity={0.32} />
+        </mesh>
+      </group>
+      <group ref={rightLegRef} position={[0.18, 0.38, 0]}>
+        <mesh position={[0, -0.18, 0]} castShadow>
+          <capsuleGeometry args={[0.105, 0.27, 4, 10]} />
+          <meshStandardMaterial color="#111827" roughness={0.45} />
+        </mesh>
+        <mesh position={[0, -0.4, 0.07]} castShadow>
+          <boxGeometry args={[0.24, 0.13, 0.38]} />
+          <meshStandardMaterial color="#030712" emissive={config.primaryColor} emissiveIntensity={0.32} />
+        </mesh>
+      </group>
 
       {/* Dinosaur Tail */}
       {avatarType === 'Dinosaur' && (
