@@ -26,9 +26,9 @@ export const AvatarSelectPage: React.FC = () => {
   const currentConfig = AVATAR_CONFIGS[avatarType] || AVATAR_CONFIGS.Boy;
 
   return (
-    <div className="relative w-full h-full flex flex-col items-center justify-between bg-gradient-to-br from-slate-950 via-purple-950 to-slate-900 p-6 sm:p-8 overflow-y-auto">
+    <div className="avatar-page-scroll relative w-full h-full min-h-0 flex flex-col items-center bg-gradient-to-br from-slate-950 via-purple-950 to-slate-900 overflow-y-auto overscroll-y-contain touch-pan-y">
       {/* Top Bar */}
-      <div className="w-full max-w-5xl flex items-center justify-between z-10">
+      <div className="w-full max-w-5xl mx-auto flex items-center justify-between z-10 shrink-0 px-4 pt-[max(1rem,env(safe-area-inset-top))] sm:px-8 sm:pt-8">
         <div className="flex items-center gap-2">
           <Sparkles className="w-6 h-6 text-neon-pink" />
           <span className="text-xl font-extrabold text-white">DanceVerse Live</span>
@@ -50,7 +50,7 @@ export const AvatarSelectPage: React.FC = () => {
       </div>
 
       {/* Main Grid: Preview & Selection */}
-      <div className="z-10 w-full max-w-5xl grid grid-cols-1 md:grid-cols-12 gap-8 items-center my-4">
+      <div className="z-10 w-full max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-12 gap-8 items-center my-4 px-4 sm:px-8 shrink-0 md:flex-1">
         {/* Left: 3D Preview */}
         <div className="md:col-span-5 flex flex-col items-center">
           <AvatarPreviewCanvas avatarType={avatarType} />
@@ -101,22 +101,25 @@ export const AvatarSelectPage: React.FC = () => {
       </div>
 
       {/* Bottom Actions */}
-      <div className="w-full max-w-5xl flex items-center justify-between z-10 pt-4 border-t border-white/10">
-        <button
-          onClick={() => setPageStep('landing')}
-          className="flex items-center gap-2 px-6 py-3 rounded-xl bg-slate-900/80 hover:bg-slate-800 text-slate-300 font-semibold border border-white/10 transition-all"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          <span>Back</span>
-        </button>
+      <div className="sticky bottom-0 z-20 w-full shrink-0 border-t border-white/10 bg-slate-950/90 backdrop-blur-xl px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-8 md:static md:bg-transparent md:backdrop-blur-none md:pt-4 md:pb-8">
+        <div className="w-full max-w-5xl mx-auto flex items-center justify-between gap-3">
+          <button
+            onClick={() => setPageStep('landing')}
+            aria-label="Back"
+            className="shrink-0 flex items-center justify-center gap-2 p-3 sm:px-6 sm:py-3 rounded-xl bg-slate-900/80 hover:bg-slate-800 text-slate-300 font-semibold border border-white/10 transition-all"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span className="hidden sm:inline">Back</span>
+          </button>
 
-        <button
-          onClick={() => setPageStep('lobby')}
-          className="flex items-center gap-2 px-8 py-3 rounded-xl bg-gradient-to-r from-neon-pink to-purple-600 hover:from-neon-pink/90 hover:to-purple-500 text-white font-bold shadow-lg shadow-neon-pink/25 transform hover:scale-105 active:scale-95 transition-all"
-        >
-          <span>Choose Concert Room</span>
-          <ArrowRight className="w-4 h-4" />
-        </button>
+          <button
+            onClick={() => setPageStep('lobby')}
+            className="min-w-0 flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 sm:px-8 py-3 rounded-xl bg-gradient-to-r from-neon-pink to-purple-600 hover:from-neon-pink/90 hover:to-purple-500 text-sm sm:text-base text-white font-bold shadow-lg shadow-neon-pink/25 transform hover:scale-[1.02] active:scale-95 transition-all"
+          >
+            <span className="truncate">Choose Concert Room</span>
+            <ArrowRight className="w-4 h-4 shrink-0" />
+          </button>
+        </div>
       </div>
     </div>
   );
