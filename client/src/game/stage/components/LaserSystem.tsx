@@ -2,6 +2,7 @@ import React, { useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { ConcertVisualState, getStageDensity, STAGE_COLORS } from '../stageVisuals';
+import { BeatClock } from '../BeatClock';
 
 interface LaserSystemProps {
   visualState: ConcertVisualState;
@@ -19,7 +20,8 @@ export const LaserSystem: React.FC<LaserSystemProps> = ({ visualState }) => {
 
   useFrame(({ clock }) => {
     const time = clock.getElapsedTime();
-    const pattern = Math.floor(time / 4.8) % 5;
+    const { barIndex, isPaused } = BeatClock.getState();
+    const pattern = isPaused ? 0 : barIndex % 5;
     const cueBoost = visualState.cueType === 'laser';
     const speed = visualState.isPlaying ? (visualState.isBeatDrop || cueBoost ? 3.8 : 1.7) : 0.22;
 

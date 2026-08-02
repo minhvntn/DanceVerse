@@ -1,4 +1,4 @@
-import { Player, Room, Track, PlaylistItem, MusicState, LeaderboardEntry } from '../../../shared/types';
+import { Player, Room, Track, PlaylistItem, MusicState, LeaderboardEntry, DancePair } from '../../../shared/types';
 
 export interface RoomInstance {
   room: Room;
@@ -12,6 +12,9 @@ export interface RoomInstance {
   passwordHash?: string;
   ownerUserId?: string;
   disconnectTimer?: NodeJS.Timeout;
+  energy?: number;
+  roles?: { host: string; cohosts: Set<string> };
+  pairs?: Map<string, DancePair>;
 }
 
 export interface ClientRateLimit {

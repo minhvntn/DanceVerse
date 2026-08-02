@@ -6,7 +6,13 @@ import { AvatarType, DanceAnimationType, Vector3D, SOCKET_EVENTS } from '../../t
 import { AvatarPrimitive } from '../avatars/AvatarPrimitive';
 import { socketService } from '../../services/socket.service';
 import { useRoomStore } from '../../stores/useRoomStore';
+import { usePlayerStore } from '../../stores/usePlayerStore';
 import { getCameraRelativeMovement } from './cameraRelativeMovement';
+import { getAudiencePlayerElevation } from '../stage/audienceElevation';
+import { PlayerNameplate } from '../avatars/components/PlayerNameplate';
+import { ChatBubble } from '../avatars/components/ChatBubble';
+import { ReactionSystem } from '../avatars/components/ReactionSystem';
+import { usePlayerSocialState } from '../avatars/hooks/usePlayerSocialState';
 
 interface PlayerControllerProps {
   myPlayerId: string;
@@ -17,6 +23,8 @@ interface PlayerControllerProps {
   onPositionChange?: (pos: Vector3D) => void;
   playerPosRef?: React.MutableRefObject<Vector3D>;
   activeEmote?: string;
+  activeEmoteStartedAt?: number;
+  team?: 'cyan' | 'pink';
 }
 
 const SHORTCUT_ANIMATIONS: Record<string, DanceAnimationType> = {
@@ -40,8 +48,11 @@ export const PlayerController: React.FC<PlayerControllerProps> = ({
   showNames,
   onPositionChange,
   playerPosRef,
-  activeEmote
+  activeEmote,
+  activeEmoteStartedAt,
+  team
 }) => {
+  const initialVisualY = getAudiencePlayerElevation(initialPosition.x, initialPosition.z);
   const groupRef = useRef<THREE.Group>(null);
   const positionRef = useRef<Vector3D>(initialPosition);
   const rotationRef = useRef<number>(0);
@@ -50,12 +61,19 @@ export const PlayerController: React.FC<PlayerControllerProps> = ({
   const [emoteBubble, setEmoteBubble] = useState<string | null>(null);
   const isMusicPlaying = useRoomStore((state) => state.musicState?.status === 'playing');
   const cameraMode = useRoomStore((state) => state.cameraMode);
+  
+  const { equippedLightstick, lightstickColor, rhythmFeedback, isFeverActive } = usePlayerStore();
+  
+  const { chatMessage, reactionEvent, clearChat } = usePlayerSocialState(myPlayerId);
+  
   const cameraForwardRef = useRef(new THREE.Vector3());
 
   // Key state tracking
   const keysRef = useRef<Record<string, boolean>>({});
   const lastEmitTimeRef = useRef<number>(0);
   const manualOverrideUntilRef = useRef<number>(0);
+  const visualYRef = useRef(getAudiencePlayerElevation(initialPosition.x, initialPosition.z));
+  const moveSeqRef = useRef<number>(0);
 
   const applyAnimation = useCallback((animation: DanceAnimationType) => {
     if (currentAnimRef.current === animation) return;
@@ -69,10 +87,10 @@ export const PlayerController: React.FC<PlayerControllerProps> = ({
       setEmoteBubble(activeEmote);
       const timer = setTimeout(() => {
         setEmoteBubble(null);
-      }, 3000);
+      }, 60000); // 1 minute
       return () => clearTimeout(timer);
     }
-  }, [activeEmote]);
+  }, [activeEmote, activeEmoteStartedAt]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -118,6 +136,71 @@ export const PlayerController: React.FC<PlayerControllerProps> = ({
       window.removeEventListener('trigger-animation', handleAnimationEvent);
     };
   }, [applyAnimation]);
+
+  useEffect(() => {
+    socketService.emit(SOCKET_EVENTS.PLAYER_LIGHTSTICK_UPDATE, {
+      equippedLightstick,
+      lightstickColor
+    });
+  }, [equippedLightstick, lightstickColor]);
+
+  const recentMovesRef = useRef<string[]>([]);
+
+  // Dance Move Library
+  const DANCE_LIBRARY = {
+    basic: ['dance-basic-01', 'dance-basic-02', 'dance-basic-03'],
+    medium: ['dance-medium-01', 'dance-medium-02', 'dance-medium-03'],
+    advanced: ['dance-advanced-01', 'dance-advanced-02'],
+    perfect: ['dance-perfect-01', 'dance-perfect-02'],
+    signature: ['dance-signature-01'],
+    fever: ['dance-fever-01', 'dance-fever-02']
+  };
+
+  const getNextMove = (pool: string[]) => {
+    let available = pool.filter(m => !recentMovesRef.current.includes(m));
+    if (available.length === 0) available = pool;
+    const chosen = available[Math.floor(Math.random() * available.length)];
+    recentMovesRef.current.push(chosen);
+    if (recentMovesRef.current.length > 2) recentMovesRef.current.shift();
+    return chosen;
+  };
+
+  // Rhythm Feedback Dance Animations
+  useEffect(() => {
+    if (!rhythmFeedback) return;
+    const { rating } = rhythmFeedback;
+    const { combo, isFeverActive } = usePlayerStore.getState();
+    
+    // Default fallback to old moves if procedural isn't fully ready, but we will return the new IDs
+    let anim: DanceAnimationType = 'dance-idle';
+    
+    if (rating === 'miss') {
+      anim = 'dance-idle';
+    } else if (isFeverActive) {
+      anim = getNextMove(DANCE_LIBRARY.fever);
+    } else if (rating === 'perfectmax') {
+      anim = getNextMove(DANCE_LIBRARY.signature);
+    } else {
+      let pools: string[][] = [];
+      
+      // Determine pools based on judgement and combo
+      if (rating === 'perfect') {
+        if (combo >= 50) pools = [DANCE_LIBRARY.advanced, DANCE_LIBRARY.perfect];
+        else pools = [DANCE_LIBRARY.medium, DANCE_LIBRARY.advanced];
+      } else if (rating === 'great') {
+        if (combo >= 25) pools = [DANCE_LIBRARY.medium];
+        else pools = [DANCE_LIBRARY.basic, DANCE_LIBRARY.medium];
+      } else { // good
+        pools = [DANCE_LIBRARY.basic];
+      }
+
+      // Flatten pools
+      let combinedPool = pools.flat();
+      anim = getNextMove(combinedPool);
+    }
+    
+    applyAnimation(anim);
+  }, [rhythmFeedback, applyAnimation]);
 
   useFrame((state, delta) => {
     if (!groupRef.current) return;
@@ -173,7 +256,6 @@ export const PlayerController: React.FC<PlayerControllerProps> = ({
       positionRef.current.z = newZ;
       if (playerPosRef && playerPosRef.current) {
         playerPosRef.current.x = newX;
-        playerPosRef.current.y = 0;
         playerPosRef.current.z = newZ;
       }
 
@@ -188,10 +270,12 @@ export const PlayerController: React.FC<PlayerControllerProps> = ({
       const now = Date.now();
       if (now - lastEmitTimeRef.current > 66) {
         lastEmitTimeRef.current = now;
+        moveSeqRef.current++;
         socketService.emit(SOCKET_EVENTS.PLAYER_MOVE, {
-          position: positionRef.current,
+          position: { x: positionRef.current.x, z: positionRef.current.z },
           rotation: rotationRef.current,
-          animation: targetAnim
+          animation: targetAnim,
+          seq: moveSeqRef.current
         });
       }
     } else {
@@ -202,31 +286,71 @@ export const PlayerController: React.FC<PlayerControllerProps> = ({
         applyAnimation('Idle');
       }
     }
+
+    const targetVisualY = getAudiencePlayerElevation(positionRef.current.x, positionRef.current.z);
+    visualYRef.current = THREE.MathUtils.damp(visualYRef.current, targetVisualY, 11, delta);
+    groupRef.current.position.y = visualYRef.current;
+
+    if (playerPosRef && playerPosRef.current) {
+      playerPosRef.current.x = positionRef.current.x;
+      playerPosRef.current.y = visualYRef.current;
+      playerPosRef.current.z = positionRef.current.z;
+    }
   });
 
+  const activeCue = useRoomStore((state) => state.activeStageCue);
+  
+  const cueColor = activeCue?.type === 'lightstick' ? (activeCue.payload as any)?.color : null;
+  const cueEffect = activeCue?.type === 'lightstick' ? (activeCue.payload as any)?.effect : null;
+  
+  const isWaveEffect = cueEffect === 'wave' || cueEffect === 'crowd-wave';
+
+  let visibleAnimation = currentAnim;
+  
+  // If active stage cue is wave, or if the user emitted a wave-lightstick emote
+  if ((isWaveEffect || emoteBubble === 'wave-lightstick') && equippedLightstick) {
+    visibleAnimation = 'WaveLightstick';
+  }
+  const finalLightstickColor = (cueColor && equippedLightstick && cueEffect !== 'rainbow') ? cueColor : lightstickColor;
+
+  // Don't show text bubble for animation emotes
+  const showTextEmote = emoteBubble && emoteBubble !== 'wave-lightstick';
+
   return (
-    <group ref={groupRef} position={[initialPosition.x, initialPosition.y, initialPosition.z]}>
+    <group ref={groupRef} position={[initialPosition.x, initialVisualY, initialPosition.z]}>
       <AvatarPrimitive
         avatarType={avatarType}
-        animation={currentAnim}
-        audienceMotion={isMusicPlaying && currentAnim === 'Idle'}
+        animation={visibleAnimation}
+        audienceMotion={isMusicPlaying && visibleAnimation === 'Idle' && !isWaveEffect}
         scale={1}
+        equippedLightstick={equippedLightstick}
+        lightstickColor={isFeverActive ? 'rainbow' : finalLightstickColor}
+        animationTimeOffset={cueEffect === 'crowd-wave' ? (positionRef.current.x + 20) * 0.15 : 0}
+        team={team}
       />
 
-      {/* Emote Bubble */}
-      {emoteBubble && (
-        <Html position={[0, 2.7, 0]} center distanceFactor={12}>
-          <div className="px-3 py-1.5 rounded-2xl bg-slate-900/95 border-2 border-neon-pink shadow-xl shadow-neon-pink/30 text-3xl animate-bounce whitespace-nowrap">
-            {emoteBubble}
-          </div>
-        </Html>
-      )}
-
-      {/* Name Tag */}
       {showNames && (
-        <Html position={[0, 2.2, 0]} center distanceFactor={14}>
-          <div className="px-2.5 py-0.5 rounded-full bg-slate-950/85 border border-white/20 text-xs font-bold text-neon-blue shadow-md whitespace-nowrap pointer-events-none">
-            {nickname} <span className="text-neon-pink">★</span>
+        <PlayerNameplate 
+          name={nickname} 
+          isHost={useRoomStore.getState().role === 'host'} 
+          rhythmMode={true}
+          combo={usePlayerStore.getState().combo}
+          team={team}
+        />
+      )}
+      {chatMessage && (
+        <ChatBubble 
+          message={chatMessage} 
+          onComplete={clearChat} 
+        />
+      )}
+      <ReactionSystem reactionEvent={reactionEvent} />
+
+      {/* Emote Bubble */}
+      {showTextEmote && (
+        <Html position={[0, 2.7, 0]} center distanceFactor={12}>
+          <div className="px-3 py-1.5 rounded-2xl bg-slate-900/95 border-2 border-neon-cyan shadow-xl shadow-neon-cyan/30 text-3xl animate-bounce whitespace-nowrap">
+            {emoteBubble}
           </div>
         </Html>
       )}

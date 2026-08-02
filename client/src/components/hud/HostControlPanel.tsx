@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRoomStore } from '../../stores/useRoomStore';
 import { socketService } from '../../services/socket.service';
 import { SOCKET_EVENTS, RoomVisibility } from '../../types';
@@ -34,7 +34,7 @@ interface HostControlPanelProps {
 export const HostControlPanel: React.FC<HostControlPanelProps> = ({
   onClose
 }) => {
-  const { currentRoom, players, playlist, musicState, hostToken } = useRoomStore();
+  const { currentRoom, players, playlist, musicState, hostToken, activeStageCue, currentTrack } = useRoomStore();
   const roomId = currentRoom?.id || '';
 
   const [activeTab, setActiveTab] = useState<'room' | 'music' | 'players' | 'roles' | 'show'>('room');
@@ -46,6 +46,7 @@ export const HostControlPanel: React.FC<HostControlPanelProps> = ({
   const [maxPlayers, setMaxPlayers] = useState(currentRoom?.maxPlayers || 30);
   const [allowChat, setAllowChat] = useState(currentRoom?.allowChat !== false);
   const [allowGuestEmotes, setAllowGuestEmotes] = useState(currentRoom?.allowGuestEmotes !== false);
+  const [rhythmMode, setRhythmMode] = useState<boolean>(currentRoom?.rhythmMode === 'audition' || currentRoom?.rhythmMode === 'freestyle');
 
   // YouTube add form
   const [youtubeUrl, setYoutubeUrl] = useState('');
@@ -54,6 +55,60 @@ export const HostControlPanel: React.FC<HostControlPanelProps> = ({
 
   // Volume
   const [volume, setVolume] = useState(musicState?.volume || 80);
+
+  // Music Timing (BPM)
+  const [bpmInput, setBpmInput] = useState(currentTrack?.metadata?.bpm?.toString() || '120');
+  const [offsetInput, setOffsetInput] = useState(currentTrack?.metadata?.beatOffsetSeconds?.toString() || '0');
+  const [beatsPerBarInput, setBeatsPerBarInput] = useState(currentTrack?.metadata?.beatsPerBar?.toString() || '4');
+  const [tapTimes, setTapTimes] = useState<number[]>([]);
+
+  useEffect(() => {
+    if (currentTrack?.metadata) {
+      setBpmInput(currentTrack.metadata.bpm.toString());
+      setOffsetInput(currentTrack.metadata.beatOffsetSeconds.toString());
+      setBeatsPerBarInput(currentTrack.metadata.beatsPerBar.toString());
+    }
+  }, [currentTrack?.metadata]);
+
+  const handleTapBPM = () => {
+    const now = Date.now();
+    const newTaps = [...tapTimes, now].slice(-8); // Keep last 8 taps
+    setTapTimes(newTaps);
+    
+    if (newTaps.length >= 4) {
+      const intervals = [];
+      for (let i = 1; i < newTaps.length; i++) {
+        intervals.push(newTaps[i] - newTaps[i - 1]);
+      }
+      // Simple average without outlier removal for brevity, or with simple sort
+      intervals.sort();
+      const avgInterval = intervals[Math.floor(intervals.length / 2)]; 
+      const calculatedBpm = Math.round((60000 / avgInterval) * 10) / 10;
+      if (calculatedBpm > 40 && calculatedBpm < 300) {
+        setBpmInput(calculatedBpm.toString());
+      }
+    }
+  };
+
+  const saveTrackMetadata = () => {
+    if (!hostToken || !currentTrack) return;
+    const bpm = parseFloat(bpmInput) || 120;
+    const offset = parseFloat(offsetInput) || 0;
+    const beatsPerBar = parseInt(beatsPerBarInput, 10) || 4;
+
+    const socket = socketService.getSocket();
+    socket.emit('host:track:metadata:update', {
+      roomId,
+      hostToken,
+      trackId: currentTrack.id,
+      metadata: {
+        ...(currentTrack.metadata || {}),
+        bpm,
+        beatOffsetSeconds: offset,
+        beatsPerBar
+      }
+    });
+  };
 
   if (!currentRoom) return null;
 
@@ -69,7 +124,8 @@ export const HostControlPanel: React.FC<HostControlPanelProps> = ({
       password: password.trim() || undefined,
       maxPlayers,
       allowChat,
-      allowGuestEmotes
+      allowGuestEmotes,
+      rhythmMode: rhythmMode ? 'audition' : 'none'
     });
   };
 
@@ -316,6 +372,16 @@ export const HostControlPanel: React.FC<HostControlPanelProps> = ({
                   <Smile className="w-4 h-4 text-neon-pink" />
                   <span>Emotes</span>
                 </label>
+                <label className="flex col-span-2 items-center gap-2 p-2.5 rounded-xl bg-slate-950 border border-white/10 cursor-pointer text-xs font-bold text-slate-300">
+                  <input
+                    type="checkbox"
+                    checked={rhythmMode}
+                    onChange={(e) => setRhythmMode(e.target.checked)}
+                    className="accent-neon-pink"
+                  />
+                  <Zap className="w-4 h-4 text-yellow-400" />
+                  <span>Rhythm Mode (Interactive Concert)</span>
+                </label>
               </div>
 
               <button
@@ -415,6 +481,101 @@ export const HostControlPanel: React.FC<HostControlPanelProps> = ({
                 </div>
               </div>
 
+              {/* MUSIC TIMING */}
+              {currentTrack && (
+                <div className="p-3 bg-slate-950/80 border border-white/10 rounded-xl flex flex-col gap-3 mt-2">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-green-400">
+                    Music Timing & BPM
+                  </h3>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <label className="text-[10px] text-slate-400 uppercase font-bold">BPM</label>
+                      <input 
+                        type="number" 
+                        value={bpmInput} 
+                        onChange={e => setBpmInput(e.target.value)} 
+                        className="w-full px-2 py-1.5 rounded bg-slate-900 border border-white/10 text-white text-xs mt-1" 
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-slate-400 uppercase font-bold">Offset (s)</label>
+                      <input 
+                        type="number" 
+                        step="0.01"
+                        value={offsetInput} 
+                        onChange={e => setOffsetInput(e.target.value)} 
+                        className="w-full px-2 py-1.5 rounded bg-slate-900 border border-white/10 text-white text-xs mt-1" 
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-slate-400 uppercase font-bold">Beats/Bar</label>
+                      <input 
+                        type="number" 
+                        value={beatsPerBarInput} 
+                        onChange={e => setBeatsPerBarInput(e.target.value)} 
+                        className="w-full px-2 py-1.5 rounded bg-slate-900 border border-white/10 text-white text-xs mt-1" 
+                      />
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center gap-2">
+                    <button 
+                      type="button"
+                      onClick={handleTapBPM}
+                      className="flex-1 py-1.5 bg-slate-800 hover:bg-slate-700 text-white text-[11px] font-bold rounded border border-white/20 active:bg-slate-600 transition-colors"
+                    >
+                      TAP BPM
+                    </button>
+                    <button 
+                      type="button"
+                      onClick={saveTrackMetadata}
+                      className="flex-1 py-1.5 bg-green-600/30 hover:bg-green-600/50 text-green-400 text-[11px] font-bold rounded border border-green-500/30 transition-colors"
+                    >
+                      SAVE TIMING
+                    </button>
+                  </div>
+                  
+                  {/* Quick offset adjust */}
+                  <div className="flex gap-1 justify-center mt-1">
+                    {[-0.05, -0.01, 0.01, 0.05].map(v => (
+                      <button 
+                        key={v}
+                        onClick={() => setOffsetInput((parseFloat(offsetInput || '0') + v).toFixed(2))}
+                        className="px-2 py-1 bg-white/5 hover:bg-white/10 rounded text-[10px] text-slate-300"
+                      >
+                        {v > 0 ? '+' : ''}{v}s
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="flex gap-2 mt-2">
+                    <button 
+                      type="button"
+                      onClick={() => {
+                         // A simple implementation would append a section marker to currentTrack.metadata.sections
+                         // Since we are updating track metadata via socket, let's just trigger a server side cue for now, 
+                         // or save it into sections array.
+                         const socket = socketService.getSocket();
+                         socket.emit('host:trigger-cue', { roomId, hostToken, type: 'laser', payload: { } });
+                      }}
+                      className="flex-1 py-1.5 bg-red-600/30 hover:bg-red-600/50 text-red-400 text-[11px] font-bold rounded border border-red-500/30 transition-colors"
+                    >
+                      MARK DROP
+                    </button>
+                    <button 
+                      type="button"
+                      onClick={() => {
+                         const socket = socketService.getSocket();
+                         socket.emit('host:trigger-cue', { roomId, hostToken, type: 'lightstick', payload: { effect: 'pulse' } });
+                      }}
+                      className="flex-1 py-1.5 bg-blue-600/30 hover:bg-blue-600/50 text-blue-400 text-[11px] font-bold rounded border border-blue-500/30 transition-colors"
+                    >
+                      MARK BREAK
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* Playlist preview */}
               <div className="flex flex-col gap-2">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
@@ -490,10 +651,10 @@ export const HostControlPanel: React.FC<HostControlPanelProps> = ({
                   <Camera size={18} /> Camera Angles
                 </h3>
                 <div className="grid grid-cols-2 gap-3">
-                  <button onClick={() => handleTriggerCue('camera', { angle: 'wide' })} className="bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-slate-500 p-3 rounded-lg text-sm text-white font-bold transition">Wide Stage</button>
-                  <button onClick={() => handleTriggerCue('camera', { angle: 'dj' })} className="bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-slate-500 p-3 rounded-lg text-sm text-white font-bold transition">DJ Close-up</button>
-                  <button onClick={() => handleTriggerCue('camera', { angle: 'audience' })} className="bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-slate-500 p-3 rounded-lg text-sm text-white font-bold transition">Audience Sweep</button>
-                  <button onClick={() => handleTriggerCue('camera', { angle: 'side-left' })} className="bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-slate-500 p-3 rounded-lg text-sm text-white font-bold transition">Side Angle</button>
+                  <button onClick={() => handleTriggerCue('camera', { angle: 'wide' })} className={`p-3 rounded-lg text-sm text-white font-bold transition border ${activeStageCue?.type === 'camera' && (activeStageCue.payload as any)?.angle === 'wide' ? 'bg-slate-700 border-neon-cyan shadow-[0_0_10px_rgba(0,240,255,0.2)]' : 'bg-slate-800 border-slate-700 hover:bg-slate-700 hover:border-slate-500'}`}>Wide Stage</button>
+                  <button onClick={() => handleTriggerCue('camera', { angle: 'dj' })} className={`p-3 rounded-lg text-sm text-white font-bold transition border ${activeStageCue?.type === 'camera' && (activeStageCue.payload as any)?.angle === 'dj' ? 'bg-slate-700 border-neon-cyan shadow-[0_0_10px_rgba(0,240,255,0.2)]' : 'bg-slate-800 border-slate-700 hover:bg-slate-700 hover:border-slate-500'}`}>DJ Close-up</button>
+                  <button onClick={() => handleTriggerCue('camera', { angle: 'audience' })} className={`p-3 rounded-lg text-sm text-white font-bold transition border ${activeStageCue?.type === 'camera' && (activeStageCue.payload as any)?.angle === 'audience' ? 'bg-slate-700 border-neon-cyan shadow-[0_0_10px_rgba(0,240,255,0.2)]' : 'bg-slate-800 border-slate-700 hover:bg-slate-700 hover:border-slate-500'}`}>Audience Sweep</button>
+                  <button onClick={() => handleTriggerCue('camera', { angle: 'side-left' })} className={`p-3 rounded-lg text-sm text-white font-bold transition border ${activeStageCue?.type === 'camera' && (activeStageCue.payload as any)?.angle === 'side-left' ? 'bg-slate-700 border-neon-cyan shadow-[0_0_10px_rgba(0,240,255,0.2)]' : 'bg-slate-800 border-slate-700 hover:bg-slate-700 hover:border-slate-500'}`}>Side Angle</button>
                 </div>
               </div>
 
@@ -502,10 +663,39 @@ export const HostControlPanel: React.FC<HostControlPanelProps> = ({
                   <Zap size={18} /> Stage Effects
                 </h3>
                 <div className="grid grid-cols-2 gap-3">
-                  <button onClick={() => handleTriggerCue('confetti')} className="bg-gradient-to-r from-pink-500 to-purple-600 p-3 rounded-lg text-sm text-white font-bold hover:opacity-80 transition shadow-lg shadow-pink-500/20">Confetti Burst</button>
-                  <button onClick={() => handleTriggerCue('fireworks')} className="bg-gradient-to-r from-yellow-500 to-orange-600 p-3 rounded-lg text-sm text-white font-bold hover:opacity-80 transition shadow-lg shadow-orange-500/20">Fireworks</button>
-                  <button onClick={() => handleTriggerCue('laser')} className="bg-neon-cyan/20 border border-neon-cyan/50 text-neon-cyan hover:bg-neon-cyan hover:text-slate-900 p-3 rounded-lg text-sm font-bold transition">Laser Sweep</button>
-                  <button onClick={() => handleTriggerCue('screen', { message: 'MAKE SOME NOISE!' })} className="bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-slate-500 p-3 rounded-lg text-sm text-white font-bold transition">Screen Message</button>
+                  <button onClick={() => handleTriggerCue('confetti')} className={`p-3 rounded-lg text-sm text-white font-bold transition shadow-lg border ${activeStageCue?.type === 'confetti' ? 'bg-gradient-to-r from-pink-400 to-purple-500 border-white shadow-[0_0_15px_rgba(255,100,200,0.5)] scale-[0.98]' : 'bg-gradient-to-r from-pink-500 to-purple-600 border-transparent hover:opacity-80'}`}>Confetti Burst</button>
+                  <button onClick={() => handleTriggerCue('fireworks')} className={`p-3 rounded-lg text-sm text-white font-bold transition shadow-lg border ${activeStageCue?.type === 'fireworks' ? 'bg-gradient-to-r from-yellow-400 to-orange-500 border-white shadow-[0_0_15px_rgba(255,160,0,0.5)] scale-[0.98]' : 'bg-gradient-to-r from-yellow-500 to-orange-600 border-transparent hover:opacity-80'}`}>Fireworks</button>
+                  <button onClick={() => handleTriggerCue('laser')} className={`p-3 rounded-lg text-sm font-bold transition col-span-2 border ${activeStageCue?.type === 'laser' ? 'bg-neon-cyan text-slate-900 border-white shadow-[0_0_15px_rgba(0,240,255,0.5)] scale-[0.98]' : 'bg-neon-cyan/20 border-neon-cyan/50 text-neon-cyan hover:bg-neon-cyan hover:text-slate-900'}`}>Laser Sweep</button>
+                </div>
+              </div>
+
+              <div className="bg-slate-950/40 p-4 rounded-xl border border-white/5">
+                <h3 className="text-[#00F0FF] font-bold mb-4 flex items-center gap-2">
+                  <Sparkles size={18} /> Lightstick Show
+                </h3>
+                
+                {/* Colors */}
+                <div className="grid grid-cols-4 gap-2 mb-3">
+                  <button onClick={() => handleTriggerCue('lightstick', { effect: 'color', color: '#00F0FF' })} className={`py-2 rounded-lg text-xs text-white font-bold transition border-b-2 ${activeStageCue?.type === 'lightstick' && (activeStageCue.payload as any)?.effect === 'color' && (activeStageCue.payload as any)?.color === '#00F0FF' ? 'bg-slate-700 border-[#00F0FF] shadow-[0_0_15px_rgba(0,240,255,0.3)]' : 'bg-slate-800 hover:bg-slate-700 border-[#00F0FF]/40 hover:border-[#00F0FF]'}`}>Cyan</button>
+                  <button onClick={() => handleTriggerCue('lightstick', { effect: 'color', color: '#FF2B9B' })} className={`py-2 rounded-lg text-xs text-white font-bold transition border-b-2 ${activeStageCue?.type === 'lightstick' && (activeStageCue.payload as any)?.effect === 'color' && (activeStageCue.payload as any)?.color === '#FF2B9B' ? 'bg-slate-700 border-[#FF2B9B] shadow-[0_0_15px_rgba(255,43,155,0.3)]' : 'bg-slate-800 hover:bg-slate-700 border-[#FF2B9B]/40 hover:border-[#FF2B9B]'}`}>Pink</button>
+                  <button onClick={() => handleTriggerCue('lightstick', { effect: 'color', color: '#7C3AED' })} className={`py-2 rounded-lg text-xs text-white font-bold transition border-b-2 ${activeStageCue?.type === 'lightstick' && (activeStageCue.payload as any)?.effect === 'color' && (activeStageCue.payload as any)?.color === '#7C3AED' ? 'bg-slate-700 border-[#7C3AED] shadow-[0_0_15px_rgba(124,58,237,0.3)]' : 'bg-slate-800 hover:bg-slate-700 border-[#7C3AED]/40 hover:border-[#7C3AED]'}`}>Purple</button>
+                  <button onClick={() => handleTriggerCue('lightstick', { effect: 'color', color: '#FFFFFF' })} className={`py-2 rounded-lg text-xs text-white font-bold transition border-b-2 ${activeStageCue?.type === 'lightstick' && (activeStageCue.payload as any)?.effect === 'color' && (activeStageCue.payload as any)?.color === '#FFFFFF' ? 'bg-slate-700 border-[#FFFFFF] shadow-[0_0_15px_rgba(255,255,255,0.3)]' : 'bg-slate-800 hover:bg-slate-700 border-[#FFFFFF]/40 hover:border-[#FFFFFF]'}`}>White</button>
+                </div>
+
+                {/* Effects */}
+                <div className="grid grid-cols-2 gap-2">
+                  <button onClick={() => handleTriggerCue('lightstick', { effect: 'pulse' })} className={`p-2 rounded-lg text-sm text-white font-bold transition flex items-center justify-center gap-2 border ${activeStageCue?.type === 'lightstick' && (activeStageCue.payload as any)?.effect === 'pulse' ? 'bg-slate-700 border-white shadow-[0_0_15px_rgba(255,255,255,0.3)]' : 'bg-slate-800 hover:bg-slate-700 border-white/20 hover:border-white/50'}`}>
+                    Pulse
+                  </button>
+                  <button onClick={() => handleTriggerCue('lightstick', { effect: 'rainbow' })} className={`p-2 rounded-lg text-sm text-white font-bold transition border ${activeStageCue?.type === 'lightstick' && (activeStageCue.payload as any)?.effect === 'rainbow' ? 'bg-gradient-to-r from-red-500/40 via-green-500/40 to-blue-500/40 border-white shadow-[0_0_15px_rgba(255,255,255,0.3)]' : 'bg-gradient-to-r from-red-500/20 via-green-500/20 to-blue-500/20 hover:from-red-500/30 hover:via-green-500/30 hover:to-blue-500/30 border-white/20'}`}>
+                    Rainbow
+                  </button>
+                  <button onClick={() => handleTriggerCue('lightstick', { effect: 'wave' })} className={`p-2 rounded-lg text-sm text-white font-bold transition border ${activeStageCue?.type === 'lightstick' && (activeStageCue.payload as any)?.effect === 'wave' ? 'bg-slate-700 border-[#00F0FF] shadow-[0_0_15px_rgba(0,240,255,0.4)]' : 'bg-slate-800 hover:bg-slate-700 border-[#00F0FF]/50 shadow-[0_0_10px_rgba(0,240,255,0.1)]'}`}>
+                    Sync Wave
+                  </button>
+                  <button onClick={() => handleTriggerCue('lightstick', { effect: 'crowd-wave' })} className={`p-2 rounded-lg text-sm text-white font-bold transition border shadow-lg ${activeStageCue?.type === 'lightstick' && (activeStageCue.payload as any)?.effect === 'crowd-wave' ? 'bg-gradient-to-r from-blue-500 to-cyan-400 border-white shadow-cyan-500/50 scale-[0.98]' : 'bg-gradient-to-r from-blue-600 to-cyan-500 border-transparent hover:opacity-80 shadow-cyan-500/20'}`}>
+                    Crowd Wave
+                  </button>
                 </div>
               </div>
               

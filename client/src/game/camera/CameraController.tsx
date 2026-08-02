@@ -56,7 +56,7 @@ export const CameraController: React.FC<CameraControllerProps> = ({
   // Handle stage cues
   useEffect(() => {
     if (activeStageCue?.type === 'camera' && cameraMode === 'cinematic') {
-      const angleName = activeStageCue.payload?.angle;
+      const angleName = (activeStageCue.payload as Record<string, any>)?.angle;
       switch (angleName) {
         case 'wide': setCinematicIndex(0); break;
         case 'dj': setCinematicIndex(1); break;

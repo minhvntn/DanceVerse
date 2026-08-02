@@ -22,12 +22,32 @@ export class TokenBucket {
     this.tokens = Math.min(this.maxTokens, this.tokens + elapsedSeconds * this.fillRatePerSecond);
     this.lastUpdate = now;
   }
+
+  public getLastUpdate(): number {
+    return this.lastUpdate;
+  }
 }
 
 export class RateLimiter {
   private buckets = new Map<string, TokenBucket>();
+  private cleanupInterval: NodeJS.Timeout;
 
-  constructor(private maxTokens: number, private fillRatePerSecond: number) {}
+  constructor(private maxTokens: number, private fillRatePerSecond: number) {
+    // Clean up stale buckets every 60 seconds
+    this.cleanupInterval = setInterval(() => {
+      const now = Date.now();
+      for (const [key, bucket] of this.buckets.entries()) {
+        // If untouched for 5 minutes, remove it
+        if (now - bucket.getLastUpdate() > 300000) {
+          this.buckets.delete(key);
+        }
+      }
+    }, 60000);
+  }
+
+  public destroy() {
+    clearInterval(this.cleanupInterval);
+  }
 
   public tryConsume(key: string, amount: number = 1): boolean {
     let bucket = this.buckets.get(key);

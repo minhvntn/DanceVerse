@@ -3,6 +3,7 @@ import { Room, Player, LeaderboardEntry, RoomStatePayload, CreateRoomPayload, Pl
 import { RoomInstance } from '../types';
 import { MusicService } from './music.service';
 import { NpcController } from '../game/npc.controller';
+import { SOCKET_EVENTS } from '../../../shared/events';
 
 export class RoomManager {
   private static instances = new Map<string, RoomInstance>();
@@ -43,22 +44,27 @@ export class RoomManager {
         room: {
           id: config.id,
           name: config.name,
-          thumbnail: config.thumbnail,
+          hostId: 'system',
+          ownerUserId: 'system',
           currentPlayers: 0,
           maxPlayers: this.MAX_PLAYERS,
           isFull: false,
           visibility: 'public',
-          hasPassword: false,
           allowChat: true,
           allowGuestEmotes: true,
           createdAt: Date.now(),
-          status: 'waiting'
+          status: 'waiting',
+          rhythmMode: 'audition',
+          thumbnail: config.thumbnail,
+          coverImage: config.thumbnail,
         },
         players: playerMap,
         playlist,
         currentTrackIndex: 0,
         musicState,
-        leaderboard: leaderboardMap
+        leaderboard: leaderboardMap,
+        roles: { host: '', cohosts: new Set() },
+        pairs: new Map()
       });
     });
   }
@@ -81,20 +87,39 @@ export class RoomManager {
       ? crypto.createHash('sha256').update(payload.password).digest('hex')
       : undefined;
 
+    const DEFAULT_THUMBNAILS = [
+      'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=800&auto=format&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1533174072545-7a4b6ad7a6c3?w=800&auto=format&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?w=800&auto=format&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=800&auto=format&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=800&auto=format&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=800&auto=format&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1501386761578-eac5c94b800a?w=800&auto=format&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1429962714451-bb934ecdc4ec?w=800&auto=format&fit=crop&q=80',
+    ];
+    let hash = 0;
+    for (let i = 0; i < roomId.length; i++) {
+      hash = (hash << 5) - hash + roomId.charCodeAt(i);
+      hash |= 0;
+    }
+    const defaultThumbnail = DEFAULT_THUMBNAILS[Math.abs(hash) % DEFAULT_THUMBNAILS.length];
+
     const room: Room = {
       id: roomId,
       name: payload.name.trim(),
-      thumbnail: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600&auto=format&fit=crop&q=80',
       currentPlayers: 0,
       maxPlayers: Math.max(2, Math.min(50, payload.maxPlayers || this.MAX_PLAYERS)),
       isFull: false,
       hostId: payload.hostId,
+      ownerUserId: payload.hostId,
       visibility: payload.visibility || 'public',
-      hasPassword: !!passwordHash,
       allowChat: payload.allowChat !== false,
       allowGuestEmotes: payload.allowGuestEmotes !== false,
       createdAt: Date.now(),
-      status: 'waiting'
+      status: 'waiting',
+      rhythmMode: 'none',
+      thumbnail: defaultThumbnail,
+      coverImage: defaultThumbnail,
     };
 
     const playlist: PlaylistItem[] = [];
@@ -118,7 +143,9 @@ export class RoomManager {
       hostId: payload.hostId,
       hostTokenHash,
       passwordHash,
-      ownerUserId: payload.ownerUserId
+      ownerUserId: payload.ownerUserId,
+      roles: { host: payload.hostId || '', cohosts: new Set() },
+      pairs: new Map()
     });
 
     return { roomId, hostToken, room };
@@ -243,6 +270,16 @@ export class RoomManager {
     instance.room.isFull = instance.room.currentPlayers >= instance.room.maxPlayers;
     instance.leaderboard.set(player.id, { nickname: player.nickname, score: player.score || 0 });
 
+    if (instance.room.battleState === 'active') {
+      let cyanCount = 0;
+      let pinkCount = 0;
+      for (const p of instance.players.values()) {
+        if (p.team === 'cyan') cyanCount++;
+        if (p.team === 'pink') pinkCount++;
+      }
+      player.team = cyanCount <= pinkCount ? 'cyan' : 'pink';
+    }
+
     const currentTrack = instance.playlist[instance.currentTrackIndex] || null;
     const playersList = Array.from(instance.players.values());
     const leaderboardList = Array.from(instance.leaderboard.values()).sort((a, b) => b.score - a.score);
@@ -282,6 +319,14 @@ export class RoomManager {
     return instance.players.get(playerId);
   }
 
+  public static addEnergy(roomId: string, amount: number): number {
+    const instance = this.instances.get(roomId);
+    if (!instance) return 0;
+    const current = instance.energy || 0;
+    instance.energy = Math.min(100, current + amount);
+    return instance.energy;
+  }
+
   public static updatePlayer(roomId: string, player: Player): boolean {
     const instance = this.instances.get(roomId);
     if (!instance || !instance.players.has(player.id)) return false;
@@ -318,5 +363,24 @@ export class RoomManager {
       }
     });
     return updatedNpcs;
+  }
+
+  private static leaderboardDebounceTimers = new Map<string, NodeJS.Timeout>();
+
+  public static triggerLeaderboardBroadcast(roomId: string, io: import('socket.io').Server): void {
+    if (this.leaderboardDebounceTimers.has(roomId)) {
+      return; // Already debounced
+    }
+    
+    const timer = setTimeout(() => {
+      this.leaderboardDebounceTimers.delete(roomId);
+      const instance = this.instances.get(roomId);
+      if (instance) {
+        const sortedLeaderboard = Array.from(instance.leaderboard.values()).sort((a, b) => b.score - a.score);
+        io.to(roomId).emit(SOCKET_EVENTS.ROOM_LEADERBOARD, sortedLeaderboard);
+      }
+    }, 1000); // 1-second debounce
+    
+    this.leaderboardDebounceTimers.set(roomId, timer);
   }
 }

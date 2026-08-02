@@ -1,31 +1,56 @@
 import React from 'react';
 import * as THREE from 'three';
-import { AvatarType } from '../../types';
+import { AvatarType, AvatarCustomization } from '../../../../shared/types';
+import { resolveColor, HAIR_COLORS } from './avatarCosmetics';
 
 interface AvatarAccessoriesProps {
   avatarType: AvatarType;
+  avatarConfig?: AvatarCustomization;
   primaryColor: string;
   secondaryColor: string;
   accentColor: string;
   simplified?: boolean;
-  accessoryRef: React.RefObject<THREE.Group | null>;
+  accessoryRef: React.RefObject<THREE.Group>;
 }
 
-export const AvatarAccessories: React.FC<AvatarAccessoriesProps> = ({
+export const AvatarAccessories: React.FC<AvatarAccessoriesProps> = React.memo(({
   avatarType,
+  avatarConfig,
   primaryColor,
   secondaryColor,
   accentColor,
   simplified = false,
   accessoryRef
-}) => (
-  <group ref={accessoryRef}>
-    {avatarType === 'Boy' && (
-      <>
-        <mesh position={[0, 0.37, -0.03]} scale={[1.02, 0.62, 0.96]}>
-          <sphereGeometry args={[0.5, simplified ? 12 : 20, simplified ? 12 : 20]} />
-          <meshStandardMaterial color={secondaryColor} roughness={0.36} />
-        </mesh>
+}) => {
+  const hairStyle = avatarConfig?.hairStyle || 'default';
+  const resolvedHairColor = avatarConfig ? resolveColor(HAIR_COLORS, avatarConfig.hairColor, secondaryColor) : secondaryColor;
+
+  let isBoy = avatarType === 'Boy';
+  let isGirl = avatarType === 'Girl';
+  let isRobot = avatarType === 'Robot';
+  let isAlien = avatarType === 'Alien';
+  let isPanda = avatarType === 'Panda';
+  let isCat = avatarType === 'Cat';
+  let isBunny = avatarType === 'Bunny';
+  let isDinosaur = avatarType === 'Dinosaur';
+
+  if (hairStyle !== 'default') {
+    isBoy = isGirl = isRobot = isAlien = isPanda = isCat = isBunny = isDinosaur = false;
+    if (hairStyle === 'spiky') isBoy = true;
+    if (hairStyle === 'cute') isGirl = true;
+    if (hairStyle === 'dj') { isBoy = true; isPanda = true; }
+  }
+
+  return (
+    <group ref={accessoryRef}>
+      {isBoy && (
+        <>
+          {hairStyle !== 'dj' && (
+            <mesh position={[0, 0.37, -0.03]} scale={[1.02, 0.62, 0.96]}>
+              <sphereGeometry args={[0.5, simplified ? 12 : 20, simplified ? 12 : 20]} />
+              <meshStandardMaterial color={resolvedHairColor} roughness={0.36} />
+            </mesh>
+          )}
         {[-0.28, -0.08, 0.15, 0.34].map((x, index) => (
           <mesh key={x} position={[x, 0.5 - Math.abs(x) * 0.2, 0.2]} rotation={[0.15, 0, -0.55 + index * 0.22]}>
             <coneGeometry args={[0.105, 0.3 + index * 0.018, 8]} />
@@ -55,7 +80,7 @@ export const AvatarAccessories: React.FC<AvatarAccessoriesProps> = ({
       </>
     )}
 
-    {avatarType === 'Girl' && (
+    {isGirl && (
       <>
         <mesh position={[0, 0.15, -0.2]} scale={[1.04, 1.08, 0.78]}>
           <sphereGeometry args={[0.47, simplified ? 12 : 20, simplified ? 12 : 20]} />
@@ -82,7 +107,7 @@ export const AvatarAccessories: React.FC<AvatarAccessoriesProps> = ({
       </>
     )}
 
-    {avatarType === 'Robot' && (
+    {isRobot && (
       <>
         <mesh position={[0, 0.57, 0]}>
           <cylinderGeometry args={[0.026, 0.026, 0.31, 8]} />
@@ -109,7 +134,7 @@ export const AvatarAccessories: React.FC<AvatarAccessoriesProps> = ({
       </>
     )}
 
-    {avatarType === 'Panda' && (
+    {isPanda && (
       <>
         {[-1, 1].map((side) => (
           <mesh key={side} position={[side * 0.37, 0.38, -0.02]}>
@@ -120,7 +145,7 @@ export const AvatarAccessories: React.FC<AvatarAccessoriesProps> = ({
       </>
     )}
 
-    {avatarType === 'Alien' && (
+    {isAlien && (
       <>
         {[-1, 1].map((side) => (
           <group key={side} position={[side * 0.18, 0.43, 0]} rotation={[0, 0, -side * 0.22]}>
@@ -137,7 +162,7 @@ export const AvatarAccessories: React.FC<AvatarAccessoriesProps> = ({
       </>
     )}
 
-    {avatarType === 'Cat' && (
+    {isCat && (
       <>
         {[-1, 1].map((side) => (
           <group key={side} position={[side * 0.29, 0.43, -0.015]} rotation={[0, 0, -side * 0.18]}>
@@ -156,7 +181,7 @@ export const AvatarAccessories: React.FC<AvatarAccessoriesProps> = ({
       </>
     )}
 
-    {avatarType === 'Bunny' && (
+    {isBunny && (
       <>
         {[-1, 1].map((side) => (
           <group key={side} position={[side * 0.2, 0.65, -0.03]} rotation={[0, 0, side * 0.09]}>
@@ -175,7 +200,7 @@ export const AvatarAccessories: React.FC<AvatarAccessoriesProps> = ({
       </>
     )}
 
-    {avatarType === 'Dinosaur' && (
+    {isDinosaur && (
       <>
         {[-0.28, 0, 0.28].map((y, index) => (
           <mesh key={y} position={[0, 0.34 - index * 0.19, -0.42]} rotation={[Math.PI / 2, 0, 0]}>
@@ -186,5 +211,5 @@ export const AvatarAccessories: React.FC<AvatarAccessoriesProps> = ({
       </>
     )}
   </group>
-);
-
+  );
+});

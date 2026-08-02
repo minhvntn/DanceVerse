@@ -75,6 +75,10 @@ class AudioService {
     }
   }
 
+  public getCurrentTime(): number {
+    return this.audio ? this.audio.currentTime : 0;
+  }
+
   public stop(): void {
     if (this.audio) {
       this.audio.pause();

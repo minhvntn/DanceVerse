@@ -1,14 +1,15 @@
 import React from 'react';
 import * as THREE from 'three';
-import { AvatarType } from '../../types';
+import { AvatarType, AvatarCustomization } from '../../../../shared/types';
 
 interface AvatarFaceProps {
   avatarType: AvatarType;
+  avatarConfig?: AvatarCustomization;
   primaryColor: string;
   secondaryColor: string;
   accentColor: string;
   simplified?: boolean;
-  eyeRef: React.RefObject<THREE.Group | null>;
+  eyeRef: React.RefObject<THREE.Group>;
 }
 
 const EyeHighlight: React.FC<{ position: [number, number, number]; scale?: number }> = ({
@@ -21,17 +22,30 @@ const EyeHighlight: React.FC<{ position: [number, number, number]; scale?: numbe
   </mesh>
 );
 
-export const AvatarFace: React.FC<AvatarFaceProps> = ({
+export const AvatarFace: React.FC<AvatarFaceProps> = React.memo(({
   avatarType,
+  avatarConfig,
   primaryColor,
   secondaryColor,
   accentColor,
   simplified = false,
   eyeRef
 }) => {
-  const isRobot = avatarType === 'Robot';
-  const isAlien = avatarType === 'Alien';
-  const isPanda = avatarType === 'Panda';
+  const faceStyle = avatarConfig?.faceStyle || 'default';
+  
+  // If a custom faceStyle is chosen, we map it to our known geometries.
+  // Otherwise, fallback to the old avatarType logic.
+  let isRobot = avatarType === 'Robot';
+  let isAlien = avatarType === 'Alien';
+  let isPanda = avatarType === 'Panda';
+  
+  if (faceStyle === 'cool') {
+    isRobot = true; // sunglasses effect
+  } else if (faceStyle === 'star-eyes') {
+    isAlien = true; // just using the alien eye positions for now
+  } else if (faceStyle === 'cute') {
+    isPanda = true; // cute blush etc
+  }
   const eyeZ = isRobot ? 0.432 : avatarType === 'Dinosaur' ? 0.492 : 0.482;
   const eyeX = isAlien ? 0.185 : 0.17;
   const eyeScale: [number, number, number] = isAlien
@@ -224,5 +238,5 @@ export const AvatarFace: React.FC<AvatarFaceProps> = ({
       )}
     </group>
   );
-};
+});
 

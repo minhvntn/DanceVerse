@@ -253,14 +253,8 @@ export const ConcertScreenUI = () => {
       {/* ================= RIGHT COLUMN ================= */}
       <group ref={titleGroupRef} position={[RIGHT_COL_START, 0, 0]}>
         
-        {/* Screen Message Override */}
-        {activeStageCue?.type === 'screen' ? (
-          <Text position={[7.5, 0, 0]} fontSize={2.8} color="#FFE600" anchorX="center" anchorY="middle" letterSpacing={0.2} maxWidth={16} textAlign="center" outlineWidth={0.05} outlineColor="#000000">
-            {activeStageCue.payload?.message || ''}
-          </Text>
-        ) : (
-          <>
-            {/* NOW PLAYING Badge */}
+        <>
+          {/* NOW PLAYING Badge */}
             <Text position={[0, 4, 0]} fontSize={0.8} color="#22d3ee" anchorX="left" anchorY="middle" letterSpacing={0.2}>
               {isPlaying ? '🎵 NOW PLAYING' : '⏸ PAUSED'}
             </Text>
@@ -340,7 +334,6 @@ export const ConcertScreenUI = () => {
         {/* Equalizer */}
         <Equalizer isPlaying={isPlaying} position={[0, -4.8, 0]} width={PROGRESS_WIDTH} />
         </>
-        )}
       </group>
 
     </RenderTexture>

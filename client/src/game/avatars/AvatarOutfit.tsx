@@ -1,8 +1,9 @@
 import React from 'react';
-import { AvatarType } from '../../types';
+import { AvatarType, AvatarCustomization } from '../../../../shared/types';
 
 interface AvatarOutfitProps {
   avatarType: AvatarType;
+  avatarConfig?: AvatarCustomization;
   primaryColor: string;
   secondaryColor: string;
   accentColor: string;
@@ -13,17 +14,40 @@ const GlowMaterial: React.FC<{ color: string; intensity?: number }> = ({ color, 
   <meshStandardMaterial color={color} emissive={color} emissiveIntensity={intensity} toneMapped={false} />
 );
 
-export const AvatarOutfit: React.FC<AvatarOutfitProps> = ({
+export const AvatarOutfit: React.FC<AvatarOutfitProps> = React.memo(({
   avatarType,
+  avatarConfig,
   primaryColor,
   secondaryColor,
   accentColor,
   simplified = false
-}) => (
-  <group>
-    {avatarType === 'Boy' && (
-      <>
-        <mesh position={[-0.16, 0.015, 0.3]} rotation={[0, 0, -0.035]}>
+}) => {
+  const outfitStyle = avatarConfig?.outfitTop || 'default';
+
+  let isBoy = avatarType === 'Boy';
+  let isGirl = avatarType === 'Girl';
+  let isRobot = avatarType === 'Robot';
+  let isAlien = avatarType === 'Alien';
+  let isPanda = avatarType === 'Panda';
+  let isCat = avatarType === 'Cat';
+  let isBunny = avatarType === 'Bunny';
+  let isDinosaur = avatarType === 'Dinosaur';
+
+  if (outfitStyle !== 'default') {
+    isBoy = isGirl = isRobot = isAlien = isPanda = isCat = isBunny = isDinosaur = false;
+    if (outfitStyle === 'danceverse-basic') isBoy = true;
+    if (outfitStyle === 'kpop-fan') isGirl = true;
+    if (outfitStyle === 'cyber') isRobot = true;
+    if (outfitStyle === 'street') isBoy = true;
+    if (outfitStyle === 'dj') isPanda = true;
+    if (outfitStyle === 'neon-raver') isAlien = true;
+  }
+
+  return (
+    <group>
+      {isBoy && (
+        <>
+          <mesh position={[-0.16, 0.015, 0.3]} rotation={[0, 0, -0.035]}>
           <boxGeometry args={[0.18, 0.5, 0.035]} />
           <meshStandardMaterial color={primaryColor} roughness={0.34} />
         </mesh>
@@ -46,7 +70,7 @@ export const AvatarOutfit: React.FC<AvatarOutfitProps> = ({
       </>
     )}
 
-    {avatarType === 'Girl' && (
+    {isGirl && (
       <>
         <mesh position={[0, -0.31, 0]}>
           <cylinderGeometry args={[0.43, 0.3, 0.25, 20]} />
@@ -65,9 +89,9 @@ export const AvatarOutfit: React.FC<AvatarOutfitProps> = ({
       </>
     )}
 
-    {avatarType === 'Robot' && (
+    {isRobot && (
       <>
-        <mesh position={[0, 0.045, 0.32]}>
+        <mesh position={[0, -0.29, 0.36]}>
           <boxGeometry args={[0.36, 0.29, 0.055]} />
           <meshStandardMaterial color="#10182F" metalness={0.7} roughness={0.2} />
         </mesh>
@@ -84,12 +108,14 @@ export const AvatarOutfit: React.FC<AvatarOutfitProps> = ({
       </>
     )}
 
-    {avatarType === 'Panda' && (
+    {isPanda && (
       <>
-        <mesh position={[0, -0.025, 0.29]} scale={[1.45, 1.55, 0.45]}>
-          <sphereGeometry args={[0.19, 16, 16]} />
-          <meshStandardMaterial color="#F8FAFC" roughness={0.5} />
-        </mesh>
+        {[-1, 1].map((side) => (
+          <mesh key={side} position={[side * 0.05, -0.025, 0.29]} scale={[1.45, 1.55, 0.45]}>
+            <sphereGeometry args={[0.19, 16, 16]} />
+            <meshStandardMaterial color="#F8FAFC" roughness={0.5} />
+          </mesh>
+        ))}
         {!simplified && (
           <>
             <mesh position={[-0.18, 0.16, 0.318]} rotation={[0, 0, 0.55]}>
@@ -105,9 +131,9 @@ export const AvatarOutfit: React.FC<AvatarOutfitProps> = ({
       </>
     )}
 
-    {avatarType === 'Alien' && (
+    {isAlien && (
       <>
-        <mesh position={[0, 0.26, 0]} rotation={[Math.PI / 2, 0, 0]}>
+        <mesh position={[0, -0.02, 0.35]} rotation={[Math.PI / 2, 0, 0]}>
           <torusGeometry args={[0.3, 0.055, 8, 20]} />
           <GlowMaterial color={accentColor} intensity={0.65} />
         </mesh>
@@ -124,12 +150,14 @@ export const AvatarOutfit: React.FC<AvatarOutfitProps> = ({
       </>
     )}
 
-    {avatarType === 'Cat' && (
+    {isCat && (
       <>
-        <mesh position={[0, 0.08, 0.327]}>
-          <boxGeometry args={[0.055, 0.42, 0.03]} />
-          <GlowMaterial color={accentColor} intensity={0.45} />
-        </mesh>
+        {[-1, 1].map((side) => (
+          <mesh key={side} position={[side * 0.05, 0.08, 0.327]}>
+            <boxGeometry args={[0.055, 0.42, 0.03]} />
+            <GlowMaterial color={accentColor} intensity={0.45} />
+          </mesh>
+        ))}
         {!simplified && (
           <>
             <mesh position={[-0.115, 0.19, 0.342]} rotation={[0, 0, 0.55]}>
@@ -145,7 +173,7 @@ export const AvatarOutfit: React.FC<AvatarOutfitProps> = ({
       </>
     )}
 
-    {avatarType === 'Bunny' && (
+    {isBunny && (
       <>
         <mesh position={[-0.09, 0.12, 0.345]} rotation={[0, 0, -0.55]} scale={[1.2, 0.72, 0.55]}>
           <sphereGeometry args={[0.1, 12, 12]} />
@@ -164,9 +192,9 @@ export const AvatarOutfit: React.FC<AvatarOutfitProps> = ({
       </>
     )}
 
-    {avatarType === 'Dinosaur' && (
+    {isDinosaur && (
       <>
-        <mesh position={[0, -0.015, 0.29]} scale={[1.35, 1.62, 0.45]}>
+        <mesh position={[0, -0.25, 0]} scale={[1.35, 1.62, 0.45]}>
           <sphereGeometry args={[0.18, 16, 16]} />
           <meshStandardMaterial color={accentColor} roughness={0.48} />
         </mesh>
@@ -185,6 +213,6 @@ export const AvatarOutfit: React.FC<AvatarOutfitProps> = ({
         <GlowMaterial color={primaryColor} intensity={0.4} />
       </mesh>
     )}
-  </group>
-);
-
+    </group>
+  );
+});

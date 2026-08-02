@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { RoomStatePayload } from '../../types';
+import { RoomStatePayload, Room } from '../../types';
 import { applyInitialRoomState } from './applyInitialRoomState';
 
 const payload = {
@@ -10,7 +10,7 @@ const payload = {
     currentPlayers: 1,
     maxPlayers: 30,
     isFull: false
-  },
+  } as unknown as Room,
   players: [],
   musicState: {
     currentItemId: null,

@@ -34,11 +34,16 @@ export const SOCKET_EVENTS = {
   PLAYER_EMOTE: 'player:emote',
   PLAYER_SCORE: 'player:score',
   PLAYER_KICKED: 'player:kicked',
+  PLAYER_LIGHTSTICK_UPDATE: 'player:lightstick-update',
+  PLAYER_RHYTHM_HIT: 'player:rhythm-hit',
+  PLAYER_AVATAR_UPDATE: 'player:avatar-update',
 
   // Music events
   PLAYLIST_UPDATED: 'playlist:updated',
   MUSIC_STATE: 'music:state',
   MUSIC_SYNC: 'music:sync',
+  HOST_TRACK_METADATA_UPDATE: 'host:track:metadata:update',
+  TRACK_METADATA_UPDATED: 'track:metadata:updated',
 
   // Song Request events
   SONG_REQUEST_CREATE: 'song-request:create',
@@ -71,6 +76,40 @@ export const SOCKET_EVENTS = {
   // Stage Cues
   HOST_TRIGGER_CUE: 'host:trigger-cue',
   SERVER_STAGE_CUE: 'server:stage-cue',
+
+  // Social & Reactions
+  REACTION_SEND: 'reaction:send',
+  REACTION_SHOW: 'reaction:show',
+  SOCIAL_WAVE: 'social:wave',
+
+  // Friends
+  FRIEND_REQUEST: 'friend:request',
+  FRIEND_ACCEPT: 'friend:accept',
+  FRIEND_DECLINE: 'friend:decline',
+  FRIEND_STATUS: 'friend:status', // For online presence updates
+
+  // Party
+  PARTY_INVITE: 'party:invite',
+  PARTY_JOIN: 'party:join',
+  PARTY_LEAVE: 'party:leave',
+  PARTY_UPDATE: 'party:update',
+  GROUP_DANCE_START: 'group-dance:start',
+
+  // Battle Mode
+  HOST_BATTLE_START: 'host:battle:start',
+  HOST_BATTLE_END: 'host:battle:end',
+  BATTLE_UPDATE: 'battle:update',
+  BATTLE_RESULT: 'battle:result',
+  PLAYER_BATTLE_HIT: 'player:battle:hit',
+  TEAM_SYNC_EVENT: 'team:sync',
+
+  // Couple Dance / Pair
+  PAIR_INVITE: 'pair:invite',
+  PAIR_INVITE_RESPONSE: 'pair:invite_response',
+  PAIR_UPDATE: 'pair:update',
+  PAIR_ROUND_START: 'pair:round_start',
+  PAIR_SYNC_RESULT: 'pair:sync_result',
+  PAIR_LEAVE: 'pair:leave',
 } as const;
 
 export type SocketEvent = typeof SOCKET_EVENTS[keyof typeof SOCKET_EVENTS];

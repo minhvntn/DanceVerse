@@ -1,7 +1,12 @@
-import React, { useEffect, useMemo, useRef } from 'react';
-import { useFrame, useThree } from '@react-three/fiber';
-import * as THREE from 'three';
+import React, { useEffect, useMemo } from 'react';
+import { useThree } from '@react-three/fiber';
 import { ConcertVisualState, getStageDensity, STAGE_COLORS } from '../stageVisuals';
+import { BeatClock } from '../BeatClock';
+import { MovingHeadLight } from './lights/MovingHeadLight';
+import { MovingLightController } from './lights/MovingLightController';
+import { MovingLightPattern, MovingLightCuePayload } from '../../../../../shared/types';
+import { socketService } from '../../../services/socket.service';
+import { SOCKET_EVENTS } from '../../../../../shared/events';
 
 interface LightingRigProps {
   visualState: ConcertVisualState;
@@ -9,122 +14,128 @@ interface LightingRigProps {
 
 export const LightingRig: React.FC<LightingRigProps> = ({ visualState }) => {
   const { scene } = useThree();
-  const fixtureRefs = useRef<THREE.Group[]>([]);
-  const lightRefs = useRef<THREE.SpotLight[]>([]);
   const density = getStageDensity(visualState.quality);
-  const fixturePositions = useMemo(
-    () => Array.from({ length: density.movingLights }, (_, index) => -17.5 + index * (35 / Math.max(1, density.movingLights - 1))),
-    [density.movingLights]
-  );
-  const targets = useMemo(() => fixturePositions.map(() => new THREE.Object3D()), [fixturePositions]);
+  
+  // Calculate positions
+  const topTrussFixtures = useMemo(() => {
+    const count = density.movingLights;
+    return Array.from({ length: count }, (_, i) => {
+      const x = -17.5 + i * (35 / Math.max(1, count - 1));
+      return { position: [x, 15.35, -18.7] as [number, number, number], rotation: [Math.PI, 0, 0] as [number, number, number] };
+    });
+  }, [density.movingLights]);
+
+  const sideTrussLeft = useMemo(() => {
+    return Array.from({ length: 3 }, (_, i) => ({
+      position: [-21.5, 4 + i * 4, -18.7] as [number, number, number],
+      rotation: [0, Math.PI / 2, -Math.PI / 2] as [number, number, number] // pointing right
+    }));
+  }, []);
+
+  const sideTrussRight = useMemo(() => {
+    return Array.from({ length: 3 }, (_, i) => ({
+      position: [21.5, 4 + i * 4, -18.7] as [number, number, number],
+      rotation: [0, -Math.PI / 2, Math.PI / 2] as [number, number, number] // pointing left
+    }));
+  }, []);
+
+  const allFixtures = [...topTrussFixtures, ...sideTrussLeft, ...sideTrussRight];
+  
+  // Max real lights budget
+  const maxRealLights = visualState.quality === 'high' ? 8 : visualState.quality === 'medium' ? 4 : 0;
 
   useEffect(() => {
-    targets.forEach((target, index) => {
-      scene.add(target);
-      if (lightRefs.current[index]) lightRefs.current[index].target = target;
-    });
-    return () => targets.forEach((target) => scene.remove(target));
-  }, [scene, targets]);
+    const handleBar = (state: any) => {
+      if (!visualState.isPlaying) {
+        MovingLightController.setCue('IDLE', '#FFFFFF', 0.5, 0.5);
+        return;
+      }
+      
+      const { barIndex } = state;
+      let pattern: MovingLightPattern = 'SWEEP_LEFT_RIGHT';
+      let speed = 1.0;
+      let color = STAGE_COLORS[barIndex % STAGE_COLORS.length];
+      let intensity = 0.8 + visualState.energy * 0.5;
 
-  useFrame(({ clock }) => {
-    const time = clock.getElapsedTime();
-    const cueBoost = visualState.cueType === 'lighting' || visualState.cueType === 'fireworks';
-    const speed = visualState.isPlaying ? (visualState.isBeatDrop || cueBoost ? 3.8 : 1.65) : 0.28;
-    targets.forEach((target, index) => {
-      const phase = index * 0.78;
-      target.position.set(
-        Math.sin(time * speed + phase) * 18,
-        0.4 + Math.sin(time * 0.55 + phase) * 0.35,
-        2 + Math.cos(time * speed * 0.66 + phase) * 15
-      );
-    });
-    fixtureRefs.current.forEach((fixture, index) => {
-      if (!fixture) return;
-      fixture.rotation.z = Math.sin(time * speed + index * 0.8) * 0.56;
-      fixture.rotation.x = -0.25 + Math.cos(time * speed * 0.7 + index) * 0.18;
-    });
-    lightRefs.current.forEach((light, index) => {
-      if (!light) return;
-      light.intensity = visualState.isPlaying ? 2.2 + visualState.energy * 3.2 + (cueBoost ? 1.8 : 0) : 0.35;
-      light.color.set(STAGE_COLORS[index % STAGE_COLORS.length]);
-    });
-  });
+      // Handle DJ Manual Cues
+      if (visualState.cueType === 'moving-light') {
+        // We can't access the cue payload easily here without adding it to visualState, 
+        // but wait, visualState only has cueType. I should add `activeCue` to visualState or just use room store.
+        // For now, let's just make it do a burst on drop.
+      }
+
+      if (visualState.isBeatDrop) {
+        pattern = 'DROP_BURST';
+        speed = 2.0;
+        intensity = 2.0;
+        color = '#FFFFFF' as any;
+      } else if (visualState.energy > 0.8) {
+        // Build or intense chorus
+        pattern = barIndex % 4 === 0 ? 'FAN' : 'CROSS';
+        speed = 1.5;
+      } else if (visualState.energy < 0.4) {
+        // Verse / Break
+        pattern = 'SWEEP_CENTER_OUT';
+        speed = 0.5;
+        intensity = 0.6;
+        color = barIndex % 2 === 0 ? '#FF007F' : '#00F0FF';
+      } else {
+        // Normal Chorus
+        pattern = ['SWEEP_LEFT_RIGHT', 'CROSS', 'FAN', 'AUDIENCE_SCAN'][barIndex % 4] as MovingLightPattern;
+        speed = 1.0;
+      }
+      
+      MovingLightController.setCue(pattern, color, intensity, speed);
+    };
+
+    const unsubscribe = BeatClock.onBar(handleBar);
+    
+    // Trigger initial state
+    handleBar(BeatClock.getState());
+    
+    return () => {
+      unsubscribe();
+    };
+  }, [visualState.isPlaying, visualState.isBeatDrop, visualState.energy, visualState.cueType]);
+
+  // Listen to manual cues from DJ via Socket
+  useEffect(() => {
+    const handleStageCue = (cue: any) => {
+      if (cue.type !== 'moving-light') return;
+      const payload = cue.payload as MovingLightCuePayload;
+      if (payload && payload.preset) {
+        MovingLightController.setCue(
+          payload.preset, 
+          payload.color || STAGE_COLORS[Math.floor(Math.random() * STAGE_COLORS.length)], 
+          payload.intensity || 1.5, 
+          payload.speed || 1.5
+        );
+      }
+    };
+    
+    socketService.on(SOCKET_EVENTS.SERVER_STAGE_CUE, handleStageCue);
+    return () => {
+      socketService.off(SOCKET_EVENTS.SERVER_STAGE_CUE, handleStageCue);
+    };
+  }, []);
 
   return (
     <group>
-      <group position={[0, 15.35, -13.2]}>
-        {fixturePositions.map((x, index) => {
-          const color = STAGE_COLORS[index % STAGE_COLORS.length];
-          return (
-            <group key={x} position={[x, 0, 0]}>
-              <group ref={(group) => { if (group) fixtureRefs.current[index] = group; }}>
-                <mesh castShadow>
-                  <cylinderGeometry args={[0.42, 0.52, 0.8, 12]} />
-                  <meshStandardMaterial color="#07090F" metalness={0.88} roughness={0.2} />
-                </mesh>
-                <mesh position={[0, -0.48, 0]} rotation={[Math.PI / 2, 0, 0]}>
-                  <circleGeometry args={[0.32, 16]} />
-                  <meshBasicMaterial color={color} toneMapped={false} />
-                </mesh>
-                {visualState.quality !== 'low' && (index % 2 === 0 || visualState.isBeatDrop) && (
-                  <mesh position={[0, -6.1, 0]}>
-                    <coneGeometry args={[2.35, 11.6, visualState.quality === 'high' ? 32 : 24, 1, true]} />
-                    <meshBasicMaterial color={color} transparent opacity={0.022 + visualState.energy * 0.026} blending={THREE.AdditiveBlending} depthWrite={false} side={THREE.DoubleSide} toneMapped={false} />
-                  </mesh>
-                )}
-              </group>
-              {index < (visualState.quality === 'high' ? 6 : visualState.quality === 'medium' ? 4 : 2) && (
-                <spotLight
-                  ref={(light) => { if (light) lightRefs.current[index] = light; }}
-                  color={color}
-                  position={[0, -0.6, 0]}
-                  angle={0.28}
-                  penumbra={0.72}
-                  distance={48}
-                  decay={1.5}
-                  intensity={1}
-                />
-              )}
-            </group>
-          );
-        })}
-      </group>
-
-      <group position={[0, 12.6, -24.3]}>
-        {[-16, -10, -4, 4, 10, 16].map((x, index) => (
-          <group key={x} position={[x, 0, 0]}>
-            <mesh castShadow>
-              <boxGeometry args={[1.2, 0.72, 0.7]} />
-              <meshStandardMaterial color="#0A0D15" metalness={0.82} roughness={0.24} />
-            </mesh>
-            <mesh position={[0, 0, 0.37]}>
-              <planeGeometry args={[0.82, 0.36]} />
-              <meshBasicMaterial color={index % 2 === 0 ? '#A8FAFF' : '#FFB0DA'} transparent opacity={visualState.isBeatDrop ? 1 : 0.28 + visualState.energy * 0.22} toneMapped={false} />
-            </mesh>
-          </group>
-        ))}
-      </group>
-
-      {[-1, 1].map((side) => (
-        <React.Fragment key={side}>
-          <pointLight position={[side * 18, 7, -17]} color={side < 0 ? '#FF007F' : '#00F0FF'} intensity={visualState.quality === 'low' ? 0.7 : 1.6 + visualState.energy} distance={28} decay={1.7} />
-          <pointLight position={[side * 9, 4, -22]} color={side < 0 ? '#7C3AED' : '#2563EB'} intensity={visualState.quality === 'high' ? 1.3 + visualState.energy : 0.5} distance={20} decay={1.8} />
-        </React.Fragment>
-      ))}
-
-      {[-12, 0, 12].map((x, index) => (
-        <group key={`front-wash-${x}`} position={[x, 4.8, -7.2]}>
-          <pointLight color={index === 1 ? '#D8F8FF' : index === 0 ? '#FF8DCC' : '#7DEBFF'} intensity={visualState.quality === 'low' ? 0.65 : 1.35 + visualState.energy * 0.85} distance={21} decay={1.6} />
-          <mesh rotation={[Math.PI / 2, 0, 0]}>
-            <cylinderGeometry args={[0.28, 0.4, 0.55, 12]} />
-            <meshStandardMaterial color="#0A0C14" metalness={0.82} roughness={0.24} />
-          </mesh>
-          <mesh position={[0, 0, -0.29]}>
-            <circleGeometry args={[0.23, 16]} />
-            <meshBasicMaterial color={index === 1 ? '#FFFFFF' : index === 0 ? '#FF8DCC' : '#7DEBFF'} transparent opacity={0.82} toneMapped={false} />
-          </mesh>
-        </group>
-      ))}
+      {allFixtures.map((fixture, index) => {
+        // Distribute real lights evenly among the fixtures
+        const isRealLight = index % Math.ceil(allFixtures.length / maxRealLights) === 0 && maxRealLights > 0;
+        
+        return (
+          <MovingHeadLight
+            key={index}
+            index={index}
+            totalFixtures={allFixtures.length}
+            position={fixture.position}
+            rotation={fixture.rotation}
+            enableRealLight={isRealLight}
+          />
+        );
+      })}
     </group>
   );
 };

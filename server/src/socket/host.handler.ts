@@ -54,8 +54,8 @@ export function registerHostHandlers(io: Server, socket: Socket): void {
     if (payload.name !== undefined && payload.name.trim().length >= 2) {
       instance.room.name = payload.name.trim();
     }
-    if (payload.visibility !== undefined) {
-      instance.room.visibility = payload.visibility;
+    if (payload.visibility && ['public', 'private', 'password'].includes(payload.visibility)) {
+      instance.room.visibility = payload.visibility as any;
     }
     if (payload.allowChat !== undefined) {
       instance.room.allowChat = payload.allowChat;
@@ -66,6 +66,9 @@ export function registerHostHandlers(io: Server, socket: Socket): void {
     if (payload.maxPlayers !== undefined) {
       instance.room.maxPlayers = Math.max(2, Math.min(50, payload.maxPlayers));
       instance.room.isFull = instance.room.currentPlayers >= instance.room.maxPlayers;
+    }
+    if (payload.rhythmMode !== undefined) {
+      instance.room.rhythmMode = payload.rhythmMode;
     }
 
     io.to(payload.roomId).emit(SOCKET_EVENTS.ROOM_STATE, {
@@ -114,6 +117,101 @@ export function registerHostHandlers(io: Server, socket: Socket): void {
       });
       io.emit(SOCKET_EVENTS.ROOM_LIST, RoomManager.getRoomList());
     }
+  });
+
+  socket.on('host:sync-dance', (payload: HostCommandPayload) => {
+    const check = authorizeRoomAction(socket, payload?.roomId, 'room.manage', payload?.hostToken);
+    if (!check.authorized) return;
+
+    io.to(payload.roomId).emit('room:sync-dance', {
+      moveId: 'group-dance-01',
+      startsAt: Date.now() + 1000
+    });
+    
+    io.to(payload.roomId).emit(SOCKET_EVENTS.CHAT_MESSAGE, {
+      id: `sys-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      senderId: 'system',
+      nickname: 'System',
+      message: `👯 Host initiated a SYNC DANCE!`,
+      timestamp: Date.now(),
+      isSystem: true,
+      type: 'system'
+    });
+  });
+
+  socket.on(SOCKET_EVENTS.HOST_BATTLE_START, (payload: HostCommandPayload) => {
+    const check = authorizeRoomAction(socket, payload?.roomId, 'room.manage', payload?.hostToken);
+    if (!check.authorized) return;
+
+    const instance = RoomManager.getRoomInstance(payload.roomId);
+    if (!instance) return;
+
+    instance.room.battleState = 'active';
+    instance.room.battleScores = { cyan: 0, pink: 0 };
+    
+    // Assign teams evenly
+    let isCyan = true;
+    for (const player of instance.players.values()) {
+      if (player.isNpc) continue;
+      player.team = isCyan ? 'cyan' : 'pink';
+      isCyan = !isCyan;
+    }
+
+    io.to(payload.roomId).emit(SOCKET_EVENTS.ROOM_STATE, {
+      room: instance.room,
+      players: Array.from(instance.players.values()),
+      musicState: MusicService.getMusicState(payload.roomId) || instance.musicState,
+      currentTrack: instance.playlist[instance.currentTrackIndex] || null,
+      playlist: instance.playlist,
+      leaderboard: Array.from(instance.leaderboard.values()).sort((a, b) => b.score - a.score)
+    });
+
+    io.to(payload.roomId).emit(SOCKET_EVENTS.CHAT_MESSAGE, {
+      id: `sys-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      senderId: 'system',
+      nickname: 'System',
+      message: `🔥 DANCE BATTLE STARTED! Cyan vs Pink!`,
+      timestamp: Date.now(),
+      isSystem: true,
+      type: 'system'
+    });
+  });
+
+  socket.on(SOCKET_EVENTS.HOST_BATTLE_END, (payload: HostCommandPayload) => {
+    const check = authorizeRoomAction(socket, payload?.roomId, 'room.manage', payload?.hostToken);
+    if (!check.authorized) return;
+
+    const instance = RoomManager.getRoomInstance(payload.roomId);
+    if (!instance || instance.room.battleState !== 'active') return;
+
+    instance.room.battleState = 'finished';
+
+    io.to(payload.roomId).emit(SOCKET_EVENTS.BATTLE_RESULT, {
+      scores: instance.room.battleScores
+    });
+    
+    io.to(payload.roomId).emit(SOCKET_EVENTS.ROOM_STATE, {
+      room: instance.room,
+      players: Array.from(instance.players.values()),
+      musicState: MusicService.getMusicState(payload.roomId) || instance.musicState,
+      currentTrack: instance.playlist[instance.currentTrackIndex] || null,
+      playlist: instance.playlist,
+      leaderboard: Array.from(instance.leaderboard.values()).sort((a, b) => b.score - a.score)
+    });
+
+    const cyanScore = instance.room.battleScores?.cyan || 0;
+    const pinkScore = instance.room.battleScores?.pink || 0;
+    const winner = cyanScore > pinkScore ? 'CYAN' : pinkScore > cyanScore ? 'PINK' : 'TIE';
+
+    io.to(payload.roomId).emit(SOCKET_EVENTS.CHAT_MESSAGE, {
+      id: `sys-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      senderId: 'system',
+      nickname: 'System',
+      message: `🏁 BATTLE ENDED! Winner: ${winner}!`,
+      timestamp: Date.now(),
+      isSystem: true,
+      type: 'system'
+    });
   });
 
   // Playlist management
@@ -223,6 +321,14 @@ export function registerHostHandlers(io: Server, socket: Socket): void {
     const check = authorizeRoomAction(socket, payload?.roomId, 'music.control', payload?.hostToken);
     if (!check.authorized) return;
 
+    if (payload.revision !== undefined) {
+      const state = MusicService.getMusicState(payload.roomId);
+      if (state && payload.revision < state.revision) {
+        socket.emit(SOCKET_EVENTS.ERROR, { message: 'Concurrent action blocked: state has changed.' });
+        return;
+      }
+    }
+
     const { musicState } = MusicService.next(payload.roomId);
     io.to(payload.roomId).emit(SOCKET_EVENTS.MUSIC_STATE, musicState);
   });
@@ -241,6 +347,20 @@ export function registerHostHandlers(io: Server, socket: Socket): void {
 
     const state = MusicService.setVolume(payload.roomId, payload.volume);
     io.to(payload.roomId).emit(SOCKET_EVENTS.MUSIC_STATE, state);
+  });
+
+  socket.on(SOCKET_EVENTS.HOST_TRACK_METADATA_UPDATE, async (payload: import('../../../shared/types').HostTrackMetadataUpdatePayload) => {
+    const check = authorizeRoomAction(socket, payload?.roomId, 'playlist.manage', payload?.hostToken);
+    if (!check.authorized) return;
+
+    const updatedTrack = await MusicService.updateTrackMetadata(payload.roomId, payload.trackId, payload.metadata);
+    if (updatedTrack) {
+      io.to(payload.roomId).emit(SOCKET_EVENTS.TRACK_METADATA_UPDATED, { trackId: payload.trackId, metadata: payload.metadata });
+      
+      // Also broadcast updated playlist so it syncs up completely
+      const playlist = MusicService.getPlaylist(payload.roomId);
+      io.to(payload.roomId).emit(SOCKET_EVENTS.PLAYLIST_UPDATED, playlist);
+    }
   });
 
   socket.on(SOCKET_EVENTS.HOST_COHOST_ASSIGN, (payload: CohostAssignPayload) => {

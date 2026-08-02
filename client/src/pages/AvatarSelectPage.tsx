@@ -16,11 +16,19 @@ export const AvatarSelectPage: React.FC = () => {
     if (user && user.displayName) {
       setNickname(user.displayName);
     }
+    if (user && user.avatarConfig) {
+      try {
+        const config = typeof user.avatarConfig === 'string' ? JSON.parse(user.avatarConfig) : user.avatarConfig;
+        usePlayerStore.getState().setAvatarConfig(config);
+      } catch (e) {
+        console.error('Failed to parse avatarConfig', e);
+      }
+    }
   }, [user, setNickname]);
 
   const avatars: AvatarType[] = [
     'Boy', 'Girl', 'Robot', 'Panda',
-    'Alien', 'Cat', 'Bunny', 'Dinosaur'
+    'Alien', 'Cat', 'Bunny', 'Dinosaur', 'CelestialQueen'
   ];
 
   const currentConfig = AVATAR_CONFIGS[avatarType] || AVATAR_CONFIGS.Boy;

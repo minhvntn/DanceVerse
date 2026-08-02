@@ -1,0 +1,395 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                  String    @id @default(cuid())
+  email               String?   @unique
+  emailVerifiedAt     DateTime?
+  username            String    @unique
+  displayName         String
+  passwordHash        String?
+  avatarType          String
+  avatarConfig        String?
+  profileImageUrl     String?
+  onboardingCompleted Boolean   @default(false)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  lastLoginAt         DateTime?
+  isActive            Boolean   @default(true)
+
+  oauthAccounts   OAuthAccount[]
+
+  preferences     UserPreference?
+  refreshSessions RefreshSession[]
+  ownedRooms      Room[]             @relation("RoomOwner")
+  roomMemberships RoomMember[]
+  playlists       UserPlaylist[]
+  playlistItems   UserPlaylistItem[]
+  roomHistory     RoomHistory[]
+  friendshipsInitiated Friendship[] @relation("FriendshipsInitiated")
+  friendshipsReceived  Friendship[] @relation("FriendshipsReceived")
+  
+  hostEvents      ConcertEvent[] @relation("HostEvents")
+  concertRSVPs    ConcertRSVP[]
+  following       Follow[]       @relation("Following")
+  followers       Follow[]       @relation("Followers")
+  notifications   Notification[]
+  
+  songRequests    SongRequest[]
+  songRequestVotes SongRequestVote[]
+  eventRoles      EventRole[]
+  eventLogs       EventLog[]
+}
+
+model UserPreference {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  musicVolume        Int     @default(80)
+  effectsEnabled     Boolean @default(true)
+  chatVisible        Boolean @default(true)
+  playerNamesVisible Boolean @default(true)
+  performanceMode    String  @default("auto")
+  language           String  @default("en")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model OAuthAccount {
+  id                    String    @id @default(cuid())
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  provider              String
+  providerAccountId     String
+
+  email                 String?
+  displayName           String?
+  avatarUrl             String?
+
+  accessTokenEncrypted  String?
+  refreshTokenEncrypted String?
+  tokenExpiresAt        DateTime?
+  scope                 String?
+
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@unique([provider, providerAccountId])
+  @@unique([userId, provider])
+  @@index([userId])
+}
+
+model RefreshSession {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  tokenHash String
+  userAgent String?
+  ipAddress String?
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
+model Room {
+  id      String  @id @default(cuid())
+  slug    String  @unique
+  name    String
+  ownerId String?
+  owner   User?   @relation("RoomOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+
+  visibility        String
+  passwordHash      String?
+  maxPlayers        Int
+  allowChat         Boolean @default(true)
+  allowGuestEmotes  Boolean @default(true)
+  allowSongRequests Boolean @default(true)
+  allowGuestVoting  Boolean @default(true)
+
+  status    String    @default("waiting")
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  endedAt   DateTime?
+
+  members        RoomMember[]
+  playlistItems  RoomPlaylistItem[]
+  historyEntries RoomHistory[]
+}
+
+model RoomMember {
+  id     String @id @default(cuid())
+  roomId String
+  room   Room   @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  sessionId String
+  nickname  String
+  role      String
+  joinedAt  DateTime  @default(now())
+  leftAt    DateTime?
+
+  @@index([roomId])
+  @@index([userId])
+}
+
+model UserPlaylist {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name        String
+  description String?
+  isPublic    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  items UserPlaylistItem[]
+}
+
+model UserPlaylistItem {
+  id         String       @id @default(cuid())
+  playlistId String
+  playlist   UserPlaylist @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  source       String
+  sourceId     String
+  originalUrl  String
+  title        String
+  thumbnailUrl String?
+  duration     Int?
+  position     Int
+  addedAt      DateTime @default(now())
+
+  @@unique([playlistId, sourceId])
+}
+
+model RoomPlaylistItem {
+  id     String @id @default(cuid())
+  roomId String
+  room   Room   @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  source        String
+  sourceId      String
+  originalUrl   String
+  title         String
+  thumbnailUrl  String?
+  duration      Int?
+  position      Int
+  requestedById String?
+  addedAt       DateTime @default(now())
+
+  @@unique([roomId, sourceId])
+  @@index([roomId, position])
+}
+
+model RoomHistory {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  roomId String
+  room   Room   @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  roomName     String
+  role         String
+  joinedAt     DateTime
+  leftAt       DateTime?
+  totalSeconds Int?
+  createdAt    DateTime  @default(now())
+
+  @@index([userId, joinedAt])
+}
+
+model Reaction {
+  id        String   @id @default(cuid())
+  userId    String
+  roomId    String
+  reaction  String
+  createdAt DateTime @default(now())
+}
+
+model ConcertEvent {
+  id          String   @id @default(cuid())
+  hostId      String
+  host        User     @relation("HostEvents", fields: [hostId], references: [id])
+  title       String
+  description String?
+  coverImage  String?
+  tags          String   // Stored as JSON string array
+  visibility    String   @default("public") // 'public' | 'private'
+  scheduledAt   DateTime
+  status        String   @default("scheduled") // 'scheduled' | 'live' | 'ended' | 'cancelled'
+  capacity      Int      @default(100)
+  roomId        String?  // References an active Room when LIVE
+  createdAt     DateTime @default(now())
+  
+  autoDjEnabled Boolean  @default(false)
+  slowMode      Int      @default(0) // seconds
+  
+  rsvps         ConcertRSVP[]
+  playlistItems EventPlaylistItem[]
+  songRequests  SongRequest[]
+  roles         EventRole[]
+  playHistory   PlayHistory[]
+  eventLogs     EventLog[]
+
+  @@index([hostId])
+  @@index([status, scheduledAt])
+}
+
+model ConcertRSVP {
+  id             String       @id @default(cuid())
+  userId         String
+  concertEventId String
+  status         String       @default("interested")
+  createdAt      DateTime     @default(now())
+  
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  event          ConcertEvent @relation(fields: [concertEventId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, concertEventId])
+}
+
+model Follow {
+  id              String   @id @default(cuid())
+  followerId      String
+  followingUserId String
+  createdAt       DateTime @default(now())
+
+  follower        User     @relation("Following", fields: [followerId], references: [id], onDelete: Cascade)
+  following       User     @relation("Followers", fields: [followingUserId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followingUserId])
+  @@index([followerId])
+  @@index([followingUserId])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String   // e.g., 'concert_scheduled', 'concert_starting', 'concert_live'
+  data      String   // JSON string payload containing relevant context
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+model Friendship {
+  id        String   @id @default(cuid())
+  userAId   String
+  userBId   String
+  status    String   // 'pending', 'accepted', 'blocked'
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  userA     User     @relation("FriendshipsInitiated", fields: [userAId], references: [id], onDelete: Cascade)
+  userB     User     @relation("FriendshipsReceived", fields: [userBId], references: [id], onDelete: Cascade)
+
+  @@unique([userAId, userBId])
+}
+
+model EventPlaylistItem {
+  id         String       @id @default(cuid())
+  eventId    String
+  event      ConcertEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  
+  videoId    String
+  title      String
+  thumbnail  String?
+  channel    String?
+  duration   Int?
+  order      Int
+  notes      String?
+  isPlayed   Boolean      @default(false)
+  createdAt  DateTime     @default(now())
+}
+
+model SongRequest {
+  id         String       @id @default(cuid())
+  eventId    String
+  event      ConcertEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  
+  userId     String
+  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  videoId    String
+  title      String
+  thumbnail  String?
+  channel    String?
+  duration   Int?
+  
+  status     String       @default("pending") // 'pending' | 'approved' | 'rejected'
+  createdAt  DateTime     @default(now())
+  
+  votes      SongRequestVote[]
+
+  @@index([eventId, status])
+}
+
+model SongRequestVote {
+  id         String       @id @default(cuid())
+  requestId  String
+  request    SongRequest  @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  
+  userId     String
+  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt  DateTime     @default(now())
+
+  @@unique([requestId, userId])
+}
+
+model EventRole {
+  id         String       @id @default(cuid())
+  eventId    String
+  event      ConcertEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  
+  userId     String
+  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  role       String       // 'cohost' | 'moderator'
+  createdAt  DateTime     @default(now())
+
+  @@unique([eventId, userId])
+}
+
+model PlayHistory {
+  id         String       @id @default(cuid())
+  eventId    String
+  event      ConcertEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  
+  videoId    String
+  title      String
+  playedAt   DateTime     @default(now())
+}
+
+model EventLog {
+  id         String       @id @default(cuid())
+  eventId    String
+  event      ConcertEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  
+  userId     String?
+  user       User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  
+  action     String       // e.g. 'song_approved', 'user_muted', 'slow_mode_changed'
+  details    String       // JSON string with extra context
+  createdAt  DateTime     @default(now())
+}

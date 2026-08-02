@@ -7,6 +7,7 @@ export interface UserProfile {
   username: string;
   displayName: string;
   avatarType: string;
+  avatarConfig?: any;
 }
 
 interface AuthState {

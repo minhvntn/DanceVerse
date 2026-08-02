@@ -326,5 +326,31 @@ export class MusicService {
     this.roomMusicStates[roomId] = updated;
     return updated;
   }
+
+  public static async updateTrackMetadata(roomId: string, trackId: string, metadata: import('../../../shared/types').TrackMusicMetadata): Promise<PlaylistItem | null> {
+    const playlist = this.getPlaylist(roomId);
+    const trackIndex = playlist.findIndex(t => t.id === trackId);
+    if (trackIndex === -1) return null;
+
+    playlist[trackIndex] = {
+      ...playlist[trackIndex],
+      metadata
+    };
+
+    // Attempt to persist to database if it's a live room item (id usually maps to RoomPlaylistItem.id)
+    try {
+      const { PrismaClient } = require('@prisma/client');
+      const prisma = new PrismaClient();
+      await prisma.roomPlaylistItem.update({
+        where: { id: trackId },
+        data: { metadata: JSON.stringify(metadata) }
+      });
+      await prisma.$disconnect();
+    } catch (e) {
+      console.warn('[MusicService] Failed to persist track metadata to DB, continuing in memory.', e);
+    }
+
+    return playlist[trackIndex];
+  }
 }
 

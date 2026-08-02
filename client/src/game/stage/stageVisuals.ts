@@ -34,12 +34,32 @@ export const resolveStageQuality = (performanceMode: PerformanceMode): StageQual
   return mobileLike ? 'medium' : 'high';
 };
 
-export const getStageDensity = (quality: StageQuality): StageDensity => {
+export const getStageDensity = (quality: StageQuality, energy: number = 0): StageDensity => {
+  // Base values based on quality
+  let crowd = 36, lasers = 10, fog = 18, confetti = 72, dust = 56, movingLights = 8;
+  
   if (quality === 'low') {
-    return { crowd: 20, lasers: 4, fog: 0, confetti: 0, dust: 18, movingLights: 4 };
+    crowd = 20; lasers = 4; fog = 0; confetti = 0; dust = 18; movingLights = 4;
+  } else if (quality === 'medium') {
+    crowd = 28; lasers = 6; fog = 10; confetti = 42; dust = 34; movingLights = 6;
   }
-  if (quality === 'medium') {
-    return { crowd: 28, lasers: 6, fog: 10, confetti: 42, dust: 34, movingLights: 6 };
-  }
-  return { crowd: 36, lasers: 10, fog: 18, confetti: 72, dust: 56, movingLights: 8 };
+  
+  // Scale effects based on energy (0-100)
+  // Lasers: Max lasers only at high energy
+  const laserMultiplier = energy > 80 ? 1.5 : (energy > 40 ? 1.0 : 0.5);
+  // Fog: Needs energy to trigger
+  const fogMultiplier = energy > 20 ? 1.0 : 0.2;
+  // Confetti: Only at very high energy (or beat drops)
+  const confettiMultiplier = energy > 80 ? 1.5 : 0;
+  // Moving Lights: scale up
+  const lightsMultiplier = energy > 60 ? 1.2 : 0.8;
+
+  return {
+    crowd,
+    lasers: Math.floor(lasers * laserMultiplier),
+    fog: Math.floor(fog * fogMultiplier),
+    confetti: Math.floor(confetti * confettiMultiplier),
+    dust,
+    movingLights: Math.floor(movingLights * lightsMultiplier)
+  };
 };

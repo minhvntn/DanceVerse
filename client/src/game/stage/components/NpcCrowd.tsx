@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { AvatarPrimitive } from '../../avatars/AvatarPrimitive';
 import { AvatarType, DanceAnimationType } from '../../../types';
 import { ConcertVisualState, getStageDensity, STAGE_COLORS } from '../stageVisuals';
+import { useRoomStore } from '../../../stores/useRoomStore';
 
 interface NpcCrowdProps {
   visualState: ConcertVisualState;
@@ -52,38 +53,67 @@ const buildCrowd = (count: number): CrowdMember[] => {
 };
 
 export const NpcCrowd: React.FC<NpcCrowdProps> = ({ visualState }) => {
-  const count = getStageDensity(visualState.quality).crowd;
+  const players = useRoomStore((state) => state.players);
+  const realPlayerCount = Object.values(players).filter(p => !p.isNpc).length;
+  
+  const count = useMemo(() => {
+    if (realPlayerCount >= 100) return 0;
+    if (realPlayerCount >= 50) return 10;
+    if (realPlayerCount >= 20) return 20;
+    return getStageDensity(visualState.quality).crowd; // Usually ~30 based on quality
+  }, [realPlayerCount, visualState.quality]);
+
   const members = useMemo(() => buildCrowd(count), [count]);
   const simplified = visualState.quality !== 'high';
+  
+  // Apply stage cue overrides for concert sync
+  const activeCue = useRoomStore((state) => state.activeStageCue);
+  
+  const cueColor = visualState.cueType === 'lightstick' ? (activeCue?.payload as any)?.color : null;
+  const cueEffect = visualState.cueType === 'lightstick' ? (activeCue?.payload as any)?.effect : null;
 
   return (
     <group>
       {members.map((member, index) => {
-        const animation = visualState.isPlaying ? member.animation : 'Idle';
-        const glowColor = STAGE_COLORS[index % STAGE_COLORS.length];
+        // If it's a wave or crowd-wave, use WaveLightstick
+        const isWaveEffect = cueEffect === 'wave' || cueEffect === 'crowd-wave';
+        const finalAnimation = isWaveEffect && member.glowStick 
+          ? 'WaveLightstick' 
+          : (visualState.isPlaying ? member.animation : 'Idle');
+        
+        // Calculate crowd wave delay based on X position (normalized to -20..20 range)
+        let timeOffset = 0;
+        if (cueEffect === 'crowd-wave') {
+          // X goes from roughly -20 to +20, so offset by position.x / 10
+          timeOffset = (member.position[0] + 20) * 0.15;
+        } else if (cueEffect === 'pulse' || cueEffect === 'color') {
+          // Small random delay so they don't look perfectly robotic
+          timeOffset = Math.random() * 0.2;
+        }
+
+        let glowColor = STAGE_COLORS[index % STAGE_COLORS.length];
+        
+        // Rainbow effect
+        if (cueEffect === 'rainbow') {
+          glowColor = STAGE_COLORS[index % STAGE_COLORS.length]; // they keep their individual colors
+        }
+        
+        const finalColor = (cueColor && cueEffect !== 'rainbow') && member.glowStick ? cueColor : glowColor;
+
         return (
           <group key={`${member.position[0]}-${member.position[2]}`} position={member.position} rotation={[0, member.rotation, 0]}>
             <AvatarPrimitive
               avatarType={member.avatarType}
-              animation={animation}
-              audienceMotion={!visualState.isPlaying}
+              animation={finalAnimation}
+              audienceMotion={!visualState.isPlaying && !isWaveEffect}
               showName={false}
               simplified={simplified}
               phase={member.phase}
               scale={member.scale}
+              equippedLightstick={member.glowStick && visualState.quality !== 'low'}
+              lightstickColor={finalColor}
+              animationTimeOffset={timeOffset}
             />
-            {member.glowStick && visualState.quality !== 'low' && (
-              <group position={[index % 2 === 0 ? -0.52 : 0.52, 1.25, 0.08]} rotation={[0, 0, index % 2 === 0 ? -0.34 : 0.34]}>
-                <mesh>
-                  <cylinderGeometry args={[0.035, 0.035, 0.78, 7]} />
-                  <meshBasicMaterial color={glowColor} transparent opacity={0.92} toneMapped={false} />
-                </mesh>
-                <mesh scale={1.8}>
-                  <cylinderGeometry args={[0.045, 0.045, 0.82, 7]} />
-                  <meshBasicMaterial color={glowColor} transparent opacity={0.09} blending={THREE.AdditiveBlending} depthWrite={false} toneMapped={false} />
-                </mesh>
-              </group>
-            )}
           </group>
         );
       })}

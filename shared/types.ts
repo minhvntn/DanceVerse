@@ -6,7 +6,8 @@ export type AvatarType =
   | 'Alien'
   | 'Cat'
   | 'Bunny'
-  | 'Dinosaur';
+  | 'Dinosaur'
+  | 'CelestialQueen';
 
 export interface AvatarConfig {
   type: AvatarType;
@@ -16,12 +17,27 @@ export interface AvatarConfig {
   description: string;
 }
 
+export interface AvatarCustomization {
+  bodyColor: string;
+  hairStyle: string;
+  hairColor: string;
+  faceStyle: string;
+  outfitTop: string;
+  outfitBottom: string;
+  outfitColor: string;
+  shoes: string;
+  shoesColor: string;
+  lightstickStyle: string;
+  lightstickColor: string;
+}
+
 export type DanceAnimationType =
   | 'Idle'
   | 'Walk'
   | 'Run'
   | 'Jump'
   | 'Wave'
+  | 'WaveLightstick'
   | 'HipHop'
   | 'Shuffle'
   | 'Moonwalk'
@@ -29,13 +45,31 @@ export type DanceAnimationType =
   | 'Clap'
   | 'Spin'
   | 'Cheer'
-  | 'RandomDance';
+  | 'RandomDance'
+  | 'dance-idle'
+  | 'dance-basic-01'
+  | 'dance-basic-02'
+  | 'dance-basic-03'
+  | 'dance-medium-01'
+  | 'dance-medium-02'
+  | 'dance-medium-03'
+  | 'dance-advanced-01'
+  | 'dance-advanced-02'
+  | 'dance-perfect-01'
+  | 'dance-perfect-02'
+  | 'dance-fever-01'
+  | 'dance-fever-02'
+  | 'dance-signature-01'
+  | 'group-dance-01'
+  | string;
 
 export interface Vector3D {
   x: number;
   y: number;
   z: number;
 }
+
+export type TeamColor = 'cyan' | 'pink';
 
 export interface Player {
   id: string;
@@ -46,11 +80,18 @@ export interface Player {
   rotation: number;
   animation: DanceAnimationType;
   emote?: string;
+  emoteStartedAt?: number;
   score?: number;
   combo?: number;
+  seq?: number;
   isNpc?: boolean;
   isHost?: boolean;
   role?: UserRole;
+  equippedLightstick?: boolean;
+  lightstickColor?: string;
+  avatarConfig?: AvatarCustomization;
+  team?: TeamColor;
+  pairId?: string;
 }
 
 export type UserRole = 'host' | 'co-host' | 'guest';
@@ -74,21 +115,55 @@ export interface RoomRequestSettings {
 export interface Room {
   id: string;
   name: string;
-  thumbnail: string;
+  hostId: string;
+  ownerUserId: string;
   currentPlayers: number;
   maxPlayers: number;
   isFull: boolean;
-  hostId?: string;
-  visibility?: RoomVisibility;
-  hasPassword?: boolean;
-  allowChat?: boolean;
-  allowGuestEmotes?: boolean;
+  visibility: RoomVisibility;
+  password?: string;
+  createdAt: number;
+  allowChat: boolean;
+  allowGuestEmotes: boolean;
+  rhythmMode?: 'none' | 'audition' | 'freestyle';
+  battleState?: 'idle' | 'active' | 'finished';
+  battleScores?: { cyan: number; pink: number };
   requestSettings?: RoomRequestSettings;
-  createdAt?: number;
   status?: RoomStatus;
+  thumbnail?: string;
+  coverImage?: string;
 }
 
 export type ConcertRoom = Room;
+
+export interface SectionMarker {
+  id: string;
+  type: 'intro' | 'verse' | 'chorus' | 'break' | 'build' | 'drop' | 'outro' | 'custom';
+  name?: string;
+  startBeat: number;
+  endBeat?: number;
+  preset?: string;
+}
+
+export type ShowAutomationTriggerMode = 'time' | 'beat' | 'bar';
+
+export interface ShowAutomationRule {
+  id: string;
+  trigger: 
+    | { type: 'beat'; every: number }
+    | { type: 'bar'; every: number };
+  action: string;
+  preset?: string;
+  enabled: boolean;
+}
+
+export interface TrackMusicMetadata {
+  bpm: number;
+  beatOffsetSeconds: number;
+  beatsPerBar: number;
+  sections?: SectionMarker[];
+  rules?: ShowAutomationRule[];
+}
 
 export interface PlaylistItem {
   id: string;
@@ -102,6 +177,7 @@ export interface PlaylistItem {
   addedAt: number;
   artist?: string;
   url?: string;
+  metadata?: TrackMusicMetadata;
 }
 
 export type Track = PlaylistItem;
@@ -132,6 +208,7 @@ export interface ChatMessage {
   sentAt?: number;
   type?: 'user' | 'system' | 'normal';
   isSystem?: boolean;
+  target?: string;
 }
 
 export interface LeaderboardEntry {
@@ -156,12 +233,14 @@ export interface RoomStatePayload {
   myPlayerId?: string;
   role?: UserRole;
   hostToken?: string;
+  energy?: number;
 }
 
 // Host and Room Payloads
 export interface HostCommandPayload {
   roomId: string;
   hostToken: string;
+  revision?: number;
 }
 
 export interface CreateRoomPayload {
@@ -178,20 +257,24 @@ export interface CreateRoomPayload {
 export interface JoinRoomPayload {
   roomId: string;
   nickname: string;
-  avatarType: AvatarType;
+  avatarType?: AvatarType;
+  avatarConfig?: AvatarCustomization;
   password?: string;
   hostToken?: string;
+  equippedLightstick?: boolean;
+  lightstickColor?: string;
 }
 
 export interface HostRoomUpdatePayload {
   roomId: string;
   hostToken: string;
   name?: string;
-  visibility?: RoomVisibility;
+  visibility?: 'public' | 'private' | 'unlisted';
   allowChat?: boolean;
   allowGuestEmotes?: boolean;
   maxPlayers?: number;
   password?: string;
+  rhythmMode?: 'none' | 'audition' | 'freestyle';
 }
 
 export interface HostPlayMusicPayload {
@@ -205,6 +288,13 @@ export interface KickPlayerPayload {
   targetPlayerId: string;
   hostToken: string;
   reason?: string;
+}
+
+export interface HostTrackMetadataUpdatePayload {
+  roomId: string;
+  hostToken: string;
+  trackId: string;
+  metadata: TrackMusicMetadata;
 }
 
 export interface PlaylistItemAddPayload {
@@ -236,6 +326,13 @@ export interface MusicVolumePayload {
   roomId: string;
   hostToken: string;
   volume: number;
+}
+
+export interface RhythmHitPayload {
+  rating: 'perfect' | 'great' | 'good' | 'miss';
+  scoreAdd: number;
+  energyAdd: number;
+  combo: number;
 }
 
 export type SocketErrorCode =
@@ -368,11 +465,91 @@ export type StageCueType =
   | 'confetti' 
   | 'fireworks' 
   | 'screen' 
-  | 'dj-animation';
+  | 'dj-animation'
+  | 'lightstick'
+  | 'floor'
+  | 'moving-light';
+
+export interface LightstickEffectCuePayload {
+  effect: 'color' | 'pulse' | 'wave' | 'rainbow' | 'crowd-wave';
+  color?: string;
+  durationMs?: number;
+  startsAt?: number;
+}
+
+export interface FloorEffectCuePayload {
+  effect: 'pulse' | 'burst' | 'chase' | 'uplight-on' | 'uplight-off' | 'uplight-fan' | 'all-white';
+  pattern?: 'grid' | 'diagonal' | 'rings' | 'center-burst';
+  color?: string;
+  durationMs?: number;
+}
+
+export type MovingLightPattern = 
+  | 'IDLE' 
+  | 'SWEEP_LEFT_RIGHT' 
+  | 'SWEEP_CENTER_OUT' 
+  | 'CROSS' 
+  | 'FAN' 
+  | 'AUDIENCE_SCAN' 
+  | 'DJ_FOCUS' 
+  | 'DROP_BURST';
+
+export interface MovingLightCuePayload {
+  preset: MovingLightPattern;
+  color?: string;
+  durationMs?: number;
+  intensity?: number;
+  speed?: number;
+}
 
 export interface StageCue {
   id: string;
   timeSeconds: number;
   type: StageCueType;
-  payload: Record<string, any>;
+  payload: Record<string, any> | LightstickEffectCuePayload | FloorEffectCuePayload | MovingLightCuePayload;
+}
+
+// Social Payloads
+export interface ReactionPayload {
+  playerId: string;
+  reaction: string; // '❤️' | '🔥' | '👏' | '😍' | '🎉'
+}
+
+export interface Party {
+  id: string;
+  leaderId: string;
+  members: string[]; // array of playerIds
+  lightstickColor?: string;
+}
+
+export interface PartyInvitePayload {
+  fromPlayerId: string;
+  fromPlayerName: string;
+  partyId: string;
+}
+
+export interface GroupDancePayload {
+  animation: string;
+  startsAt: number;
+}
+
+export type PairJudgement = 'ULTRA' | 'PERFECT' | 'GREAT' | 'GOOD' | 'MISS';
+
+export interface DancePair {
+  id: string;
+  player1Id: string;
+  player2Id: string;
+  createdAt: number;
+  pairScore: number;
+  pairCombo: number;
+  feverMeter: number;
+}
+
+export interface PairRoundResult {
+  pairId: string;
+  roundId: string;
+  judgement: PairJudgement;
+  differenceMs: number;
+  pairScoreBonus: number;
+  pairCombo: number;
 }

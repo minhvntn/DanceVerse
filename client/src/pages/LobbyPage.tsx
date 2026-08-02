@@ -2,9 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { useGameStore } from '../stores/useGameStore';
 import { useRoomStore } from '../stores/useRoomStore';
 import { usePlayerStore } from '../stores/usePlayerStore';
+import { useAuthStore } from '../stores/useAuthStore';
 import { socketService } from '../services/socket.service';
 import { audioService } from '../services/audio.service';
 import { SOCKET_EVENTS, Room, RoomStatePayload, RoomVisibility } from '../types';
+import { apiClient } from '../services/apiClient';
+import { ConcertEventCard } from '../components/ui/ConcertEventCard';
+import { EventDetailModal } from '../components/modals/EventDetailModal';
+import { NotificationBell } from '../components/ui/NotificationBell';
 import { applyInitialRoomState } from '../features/room-session/applyInitialRoomState';
 import {
   Users,
@@ -21,8 +26,44 @@ import {
   ArrowLeft,
   X,
   MessageSquare,
-  Smile
+  Smile,
+  Settings,
+  Calendar,
+  Star,
+  Plus
 } from 'lucide-react';
+
+const CONCERT_PRESET_THUMBNAILS = [
+  'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=800&auto=format&fit=crop&q=80', // Neon City Concert
+  'https://images.unsplash.com/photo-1533174072545-7a4b6ad7a6c3?w=800&auto=format&fit=crop&q=80', // Beach Festival
+  'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?w=800&auto=format&fit=crop&q=80', // Space Party
+  'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=800&auto=format&fit=crop&q=80', // DJ Stadium Lights
+  'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=800&auto=format&fit=crop&q=80', // Laser Party Club
+  'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=800&auto=format&fit=crop&q=80', // Stage Lights & Crowd
+  'https://images.unsplash.com/photo-1501386761578-eac5c94b800a?w=800&auto=format&fit=crop&q=80', // Live Concert Performance
+  'https://images.unsplash.com/photo-1429962714451-bb934ecdc4ec?w=800&auto=format&fit=crop&q=80', // EDM Festival Stage
+];
+
+const ROOM_THUMBNAILS: Record<string, string> = {
+  'room-neon': 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=800&auto=format&fit=crop&q=80',
+  'room-beach': 'https://images.unsplash.com/photo-1533174072545-7a4b6ad7a6c3?w=800&auto=format&fit=crop&q=80',
+  'room-space': 'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?w=800&auto=format&fit=crop&q=80'
+};
+
+export const getRoomThumbnail = (room: { id?: string; name?: string; thumbnail?: string; coverImage?: string }): string => {
+  if (room.thumbnail) return room.thumbnail;
+  if (room.coverImage) return room.coverImage;
+  if (room.id && ROOM_THUMBNAILS[room.id]) return ROOM_THUMBNAILS[room.id];
+  
+  const seed = (room.id || room.name || 'concert');
+  let hash = 0;
+  for (let i = 0; i < seed.length; i++) {
+    hash = (hash << 5) - hash + seed.charCodeAt(i);
+    hash |= 0;
+  }
+  const index = Math.abs(hash) % CONCERT_PRESET_THUMBNAILS.length;
+  return CONCERT_PRESET_THUMBNAILS[index];
+};
 
 export const LobbyPage: React.FC = () => {
   const { roomList, setRoomList, setRoomState, targetRoomId, setTargetRoomId } = useRoomStore();
@@ -30,9 +71,13 @@ export const LobbyPage: React.FC = () => {
   const setPageStep = useGameStore((state) => state.setPageStep);
   const setConnectionStatus = useGameStore((state) => state.setConnectionStatus);
 
-  const [activeTab, setActiveTab] = useState<'browse' | 'create'>('browse');
+  const [activeTab, setActiveTab] = useState<'browse' | 'create' | 'upcoming' | 'following' | 'my-concerts'>('browse');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [joiningId, setJoiningId] = useState<string | null>(null);
+  const [upcomingEvents, setUpcomingEvents] = useState<any[]>([]);
+  const [followingEvents, setFollowingEvents] = useState<any[]>([]);
+  const [myEvents, setMyEvents] = useState<any[]>([]);
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
 
   // Invite link input
   const [inviteInput, setInviteInput] = useState<string>(targetRoomId || '');
@@ -43,13 +88,19 @@ export const LobbyPage: React.FC = () => {
   const [passwordInput, setPasswordInput] = useState<string>('');
 
   // Create Room Form State
-  const [roomName, setRoomName] = useState<string>(`${nickname}'s Concert`);
+  const [roomName, setRoomName] = useState<string>(nickname ? `${nickname}'s Concert` : 'Live Concert Stage');
   const [visibility, setVisibility] = useState<RoomVisibility>('public');
   const [roomPassword, setRoomPassword] = useState<string>('');
   const [maxPlayers, setMaxPlayers] = useState<number>(30);
   const [allowChat, setAllowChat] = useState<boolean>(true);
   const [allowGuestEmotes, setAllowGuestEmotes] = useState<boolean>(true);
   const [isCreating, setIsCreating] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (nickname && (roomName === "'s Concert" || roomName === 'Live Concert Stage' || !roomName)) {
+      setRoomName(`${nickname}'s Concert`);
+    }
+  }, [nickname]);
 
   useEffect(() => {
     const socket = socketService.connect();
@@ -84,7 +135,9 @@ export const LobbyPage: React.FC = () => {
           roomId: res.roomId,
           nickname: nickname || 'Host',
           avatarType,
-          hostToken: res.hostToken
+          hostToken: res.hostToken,
+          equippedLightstick: true,
+          lightstickColor: '#00F0FF'
         });
       } else {
         setErrorMsg(res?.error || 'Failed to create room.');
@@ -105,6 +158,22 @@ export const LobbyPage: React.FC = () => {
       socket.off('host:room:created', handleRoomCreated);
     };
   }, [setRoomList, setRoomState, setMyPlayerId, setPageStep, setConnectionStatus, nickname, avatarType]);
+
+  useEffect(() => {
+    if (activeTab === 'upcoming') {
+      apiClient.get('/events?status=scheduled&orderBy=asc')
+        .then(res => setUpcomingEvents(res.data))
+        .catch(err => console.error(err));
+    } else if (activeTab === 'following') {
+      apiClient.get('/events/following')
+        .then(res => setFollowingEvents(res.data))
+        .catch(err => console.error(err));
+    } else if (activeTab === 'my-concerts') {
+      apiClient.get(`/events?hostId=${useAuthStore.getState().user?.id}&status=scheduled&status=live&status=ended`)
+        .then(res => setMyEvents(res.data))
+        .catch(err => console.error(err));
+    }
+  }, [activeTab]);
 
   // Handle URL invite check on mount
   useEffect(() => {
@@ -142,7 +211,7 @@ export const LobbyPage: React.FC = () => {
     }
 
     const foundRoom = roomList.find((r) => r.id === roomId);
-    if (foundRoom && foundRoom.hasPassword && !password) {
+    if (foundRoom && !!foundRoom.password && !password) {
       setPasswordModalRoomId(foundRoom.id);
       setPasswordModalName(foundRoom.name);
       setPasswordInput('');
@@ -159,13 +228,17 @@ export const LobbyPage: React.FC = () => {
     socket.emit(SOCKET_EVENTS.ROOM_JOIN, {
       nickname: nickname || 'Fan',
       avatarType,
+      avatarConfig: usePlayerStore.getState().avatarConfig,
       roomId,
       password,
       hostToken: savedHostToken
     });
   };
 
-  const handleCreateRoomSubmit = (e: React.FormEvent) => {
+  const [isScheduled, setIsScheduled] = useState(false);
+  const [scheduledAt, setScheduledAt] = useState<string>('');
+
+  const handleCreateRoomSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const trimmedName = roomName.trim();
     if (trimmedName.length < 2 || trimmedName.length > 30) {
@@ -173,19 +246,50 @@ export const LobbyPage: React.FC = () => {
       return;
     }
 
+    if (useAuthStore.getState().status !== 'authenticated') {
+      setErrorMsg('You must be logged in to host a concert. Please log out and sign in with an account.');
+      return;
+    }
+    
+    if (isScheduled && !scheduledAt) {
+      setErrorMsg('Please select a valid date and time.');
+      return;
+    }
+
+    if (isScheduled && new Date(scheduledAt) < new Date()) {
+      setErrorMsg('Scheduled time must be in the future.');
+      return;
+    }
+
     setErrorMsg(null);
     setIsCreating(true);
-    const socket = socketService.getSocket();
-    socket.emit(SOCKET_EVENTS.HOST_ROOM_CREATE, {
-      name: trimmedName,
-      nickname: nickname || 'Host',
-      avatarType,
-      maxPlayers,
-      password: roomPassword.trim() || undefined,
-      visibility,
-      allowChat,
-      allowGuestEmotes
-    });
+
+    try {
+      const res = await apiClient.post('/events', {
+        title: trimmedName,
+        capacity: maxPlayers,
+        visibility,
+        goLiveNow: !isScheduled,
+        scheduledAt: isScheduled ? new Date(scheduledAt).toISOString() : new Date().toISOString()
+      });
+
+      if (!isScheduled && res.roomId) {
+        // Successfully went live now, join the room
+        sessionStorage.setItem(`dv_hostToken_${res.roomId}`, res.hostToken);
+        handleJoinById(res.roomId);
+      } else {
+        // Event scheduled, clear form and switch to upcoming
+        setIsCreating(false);
+        setRoomName('');
+        setIsScheduled(false);
+        setScheduledAt('');
+        setActiveTab('upcoming');
+      }
+    } catch (err: any) {
+      console.error(err);
+      setErrorMsg(err.message || 'Failed to create event');
+      setIsCreating(false);
+    }
   };
 
   return (
@@ -197,31 +301,34 @@ export const LobbyPage: React.FC = () => {
           <span className="text-xl sm:text-2xl font-black text-white tracking-wider">DanceVerse Live</span>
         </div>
         <div className="flex items-center gap-2 sm:gap-3">
+          <NotificationBell />
           <button
-            onClick={() => setPageStep('avatar')}
+            onClick={() => setPageStep('customize')}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900/80 border border-white/10 text-slate-300 hover:border-neon-pink/40 hover:text-white transition-all text-xs sm:text-sm"
           >
-            <ArrowLeft className="w-4 h-4" />
-            <span className="hidden sm:inline">Change Avatar:</span>
-            <span className="font-bold text-neon-pink">{avatarType}</span>
+            <Smile className="w-4 h-4" />
+            <span className="hidden sm:inline">Customize Avatar</span>
           </button>
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900/80 border border-white/10">
+          <button 
+            onClick={() => setPageStep('profile')}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900/80 border border-white/10 hover:border-neon-blue/40 transition-all cursor-pointer"
+          >
             <span className="text-xs text-slate-400 hidden sm:inline">Nickname:</span>
             <span className="text-sm font-bold text-neon-blue">{nickname}</span>
-          </div>
+          </button>
         </div>
       </div>
 
       {/* Main Container */}
       <div className="z-10 w-full max-w-5xl flex flex-col items-center my-auto py-2">
         {/* Navigation Tabs */}
-        <div className="flex items-center gap-3 p-1.5 bg-slate-900/90 border border-white/10 rounded-2xl mb-6 shadow-xl">
+        <div className="flex items-center gap-3 p-1.5 bg-slate-900/90 border border-white/10 rounded-2xl mb-6 shadow-xl w-full sm:w-auto overflow-x-auto">
           <button
             onClick={() => {
               setActiveTab('browse');
               setErrorMsg(null);
             }}
-            className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold text-sm transition-all ${
+            className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold text-sm transition-all whitespace-nowrap ${
               activeTab === 'browse'
                 ? 'bg-gradient-to-r from-neon-pink to-neon-purple text-white shadow-lg shadow-neon-pink/30'
                 : 'text-slate-400 hover:text-white'
@@ -230,19 +337,65 @@ export const LobbyPage: React.FC = () => {
             <Radio className="w-4 h-4" />
             <span>Live Concerts ({roomList.length})</span>
           </button>
+          
+          <button
+            onClick={() => {
+              setActiveTab('upcoming');
+              setErrorMsg(null);
+            }}
+            className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold text-sm transition-all whitespace-nowrap ${
+              activeTab === 'upcoming'
+                ? 'bg-gradient-to-r from-neon-pink to-neon-purple text-white shadow-lg shadow-neon-pink/30'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <Calendar className="w-4 h-4" />
+            <span>Upcoming Concerts</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setActiveTab('following');
+              setErrorMsg(null);
+            }}
+            className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold text-sm transition-all whitespace-nowrap ${
+              activeTab === 'following'
+                ? 'bg-gradient-to-r from-neon-pink to-neon-purple text-white shadow-lg shadow-neon-pink/30'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <Star className="w-4 h-4" />
+            <span>Following</span>
+          </button>
+
           <button
             onClick={() => {
               setActiveTab('create');
               setErrorMsg(null);
             }}
-            className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold text-sm transition-all ${
+            className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold text-sm transition-all whitespace-nowrap ${
               activeTab === 'create'
                 ? 'bg-gradient-to-r from-neon-pink to-neon-purple text-white shadow-lg shadow-neon-pink/30'
                 : 'text-slate-400 hover:text-white'
             }`}
           >
-            <PlusCircle className="w-4 h-4" />
-            <span>Create Concert Room</span>
+            <Plus className="w-4 h-4" />
+            <span>Host Concert</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setActiveTab('my-concerts');
+              setErrorMsg(null);
+            }}
+            className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold text-sm transition-all whitespace-nowrap ${
+              activeTab === 'my-concerts'
+                ? 'bg-gradient-to-r from-neon-pink to-neon-purple text-white shadow-lg shadow-neon-pink/30'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <Settings className="w-4 h-4" />
+            <span>Dashboard</span>
           </button>
         </div>
 
@@ -292,12 +445,23 @@ export const LobbyPage: React.FC = () => {
                     key={room.id}
                     className="group relative flex flex-col justify-between bg-slate-900/80 border border-white/10 hover:border-neon-pink/50 rounded-2xl overflow-hidden transition-all duration-300 hover:scale-[1.02] hover:shadow-2xl hover:shadow-neon-pink/20"
                   >
-                    {/* Thumbnail background */}
                     <div className="relative h-44 w-full overflow-hidden bg-slate-800">
-                      <img
-                        src={room.thumbnail}
-                        alt={room.name}
-                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 opacity-70"
+                      <div 
+                        className="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 opacity-70"
+                        style={{
+                          background: `linear-gradient(135deg, hsl(${room.id.length * 25 % 360}, 60%, 15%), hsl(${room.id.length * 45 % 360}, 70%, 10%))`
+                        }}
+                      />
+                      <img 
+                        src={getRoomThumbnail(room)}
+                        alt={room.name || 'Concert Room'}
+                        className="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 opacity-80"
+                        onError={(e) => {
+                          const fallback = CONCERT_PRESET_THUMBNAILS[0];
+                          if (e.currentTarget.src !== fallback) {
+                            e.currentTarget.src = fallback;
+                          }
+                        }}
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/40 to-transparent" />
 
@@ -308,7 +472,7 @@ export const LobbyPage: React.FC = () => {
                       </div>
 
                       {/* Password lock indicator */}
-                      {room.hasPassword && (
+                      {!!room.password && (
                         <div
                           className="absolute top-3 right-3 flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-500/20 backdrop-blur-sm border border-amber-500/40 text-amber-300"
                           title="Requires Password"
@@ -359,6 +523,64 @@ export const LobbyPage: React.FC = () => {
                 );
               })}
             </div>
+          </div>
+        )}
+
+        {/* Tab: Upcoming Events */}
+        {activeTab === 'upcoming' && (
+          <div className="w-full max-w-5xl px-4 flex flex-col gap-6">
+            <h2 className="text-xl font-black text-white border-b border-white/10 pb-4">
+              Upcoming Concerts
+            </h2>
+            
+            {upcomingEvents.length === 0 ? (
+              <div className="w-full bg-slate-900/50 border border-white/10 rounded-2xl p-12 flex flex-col items-center justify-center text-center">
+                <Calendar className="w-12 h-12 text-slate-600 mb-4" />
+                <h3 className="text-lg font-bold text-slate-300">No upcoming events</h3>
+                <p className="text-sm text-slate-500 mt-2">Check back later or host your own concert!</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {upcomingEvents.map((event) => (
+                  <ConcertEventCard 
+                    key={event.id}
+                    event={event}
+                    onView={() => {
+                      setSelectedEventId(event.id);
+                    }}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Tab: Following Events */}
+        {activeTab === 'following' && (
+          <div className="w-full max-w-5xl px-4 flex flex-col gap-6">
+            <h2 className="text-xl font-black text-white border-b border-white/10 pb-4">
+              From DJs You Follow
+            </h2>
+            
+            {followingEvents.length === 0 ? (
+              <div className="w-full bg-slate-900/50 border border-white/10 rounded-2xl p-12 flex flex-col items-center justify-center text-center">
+                <Star className="w-12 h-12 text-slate-600 mb-4" />
+                <h3 className="text-lg font-bold text-slate-300">No events found</h3>
+                <p className="text-sm text-slate-500 mt-2">The DJs you follow don't have any upcoming or live events right now.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {followingEvents.map((event) => (
+                  <ConcertEventCard 
+                    key={event.id}
+                    event={event}
+                    onView={() => {
+                      setSelectedEventId(event.id);
+                    }}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -484,15 +706,151 @@ export const LobbyPage: React.FC = () => {
               </label>
             </div>
 
+            {/* Schedule Options */}
+            <div className="flex flex-col gap-3 pt-2 border-t border-white/10">
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={isScheduled}
+                  onChange={(e) => setIsScheduled(e.target.checked)}
+                  className="w-4 h-4 accent-neon-pink rounded"
+                />
+                <span className="text-sm font-bold text-slate-300">Schedule for Later</span>
+              </label>
+
+              {isScheduled && (
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                    Date & Time
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={scheduledAt}
+                    onChange={(e) => setScheduledAt(e.target.value)}
+                    className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-white/10 text-white focus:outline-none focus:border-neon-pink transition-all font-semibold"
+                  />
+                </div>
+              )}
+            </div>
+
             {/* Submit Button */}
             <button
               type="submit"
               disabled={isCreating}
               className="w-full py-4 bg-gradient-to-r from-neon-pink to-neon-purple text-white font-extrabold text-base rounded-2xl shadow-xl shadow-neon-pink/20 hover:brightness-110 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed mt-2"
             >
-              {isCreating ? 'Creating Concert...' : 'Launch Concert Room 🚀'}
+              {isCreating ? 'Processing...' : isScheduled ? 'Schedule Concert 📅' : 'Go Live Now 🚀'}
             </button>
           </form>
+        )}
+
+        {/* Tab: Dashboard / My Concerts */}
+        {activeTab === 'my-concerts' && (
+          <div className="w-full max-w-5xl px-4 flex flex-col gap-6">
+            <h2 className="text-xl font-black text-white border-b border-white/10 pb-4">
+              Host Dashboard
+            </h2>
+            
+            {myEvents.length === 0 ? (
+              <div className="w-full bg-slate-900/50 border border-white/10 rounded-2xl p-12 flex flex-col items-center justify-center text-center">
+                <Settings className="w-12 h-12 text-slate-600 mb-4" />
+                <h3 className="text-lg font-bold text-slate-300">No concerts hosted yet</h3>
+                <p className="text-sm text-slate-500 mt-2">Create a new concert to see it here.</p>
+                <button 
+                  onClick={() => setActiveTab('create')}
+                  className="mt-6 px-6 py-2 bg-neon-purple rounded-xl font-bold text-white shadow-lg shadow-neon-purple/20"
+                >
+                  Create Concert
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {myEvents.map((event) => (
+                  <div key={event.id} className="relative group">
+                    <ConcertEventCard 
+                      event={event}
+                      onView={() => setSelectedEventId(event.id)}
+                    />
+                    
+                    {event.status === 'scheduled' && (
+                      <div className="absolute top-2 right-2 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button 
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            if (window.confirm('Start this concert early?')) {
+                              try {
+                                const res = await apiClient.post(`/events/${event.id}/start-early`);
+                                sessionStorage.setItem(`dv_hostToken_${res.data.roomId}`, res.data.hostToken);
+                                handleJoinById(res.data.roomId);
+                              } catch (err: any) {
+                                alert(err.response?.data?.message || 'Error starting early');
+                              }
+                            }
+                          }}
+                          className="px-3 py-1 bg-neon-cyan text-slate-900 font-bold text-xs rounded-lg shadow-lg"
+                        >
+                          Go Live Now
+                        </button>
+                        <button 
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            if (window.confirm('Cancel this concert?')) {
+                              try {
+                                await apiClient.post(`/events/${event.id}/cancel`);
+                                setMyEvents(myEvents.filter(ev => ev.id !== event.id));
+                              } catch (err: any) {
+                                alert(err.response?.data?.message || 'Error canceling');
+                              }
+                            }
+                          }}
+                          className="px-3 py-1 bg-red-500 text-white font-bold text-xs rounded-lg shadow-lg"
+                        >
+                          Cancel
+                        </button>
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            localStorage.setItem('dv_dj_eventId', event.id);
+                            setPageStep('djcontrol');
+                          }}
+                          className="px-3 py-1 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold text-xs rounded-lg shadow-lg"
+                        >
+                          🎛️ DJ Control
+                        </button>
+                      </div>
+                    )}
+                    {event.status === 'live' && (
+                      <div className="absolute top-2 right-2 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                         <button 
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            if (event.roomId) {
+                              handleJoinById(event.roomId);
+                            } else {
+                              alert('Room ID not found for this live event.');
+                            }
+                          }}
+                          className="px-3 py-1 bg-neon-purple text-white font-bold text-xs rounded-lg shadow-lg"
+                        >
+                          Rejoin Room
+                        </button>
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            localStorage.setItem('dv_dj_eventId', event.id);
+                            setPageStep('djcontrol');
+                          }}
+                          className="px-3 py-1 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold text-xs rounded-lg shadow-lg"
+                        >
+                          🎛️ DJ Control
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         )}
       </div>
 
@@ -545,6 +903,14 @@ export const LobbyPage: React.FC = () => {
       <div className="z-10 text-center text-xs text-slate-500 mt-4">
         Powered by React, Socket.IO & Three.js • DanceVerse Live
       </div>
+      {/* Event Detail Modal */}
+      {selectedEventId && (
+        <EventDetailModal
+          eventId={selectedEventId}
+          onClose={() => setSelectedEventId(null)}
+          onJoin={(roomId) => handleJoinById(roomId)}
+        />
+      )}
     </div>
   );
 };

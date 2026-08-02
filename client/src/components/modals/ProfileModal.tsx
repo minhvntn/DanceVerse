@@ -3,6 +3,7 @@ import { useAuthStore } from '../../stores/useAuthStore';
 import { usePlayerStore } from '../../stores/usePlayerStore';
 import { apiClient } from '../../services/apiClient';
 import { X, Save, LogOut } from 'lucide-react';
+import { ENABLE_FACEBOOK_LOGIN } from '../../config/runtime';
 
 interface ProfileModalProps {
   onClose: () => void;
@@ -229,17 +230,19 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ onClose }) => {
                   )}
                 </div>
 
-                <div className="flex items-center justify-between p-3 bg-slate-900/50 rounded-xl border border-white/5">
-                  <div>
-                    <span className="text-sm font-bold text-white">Facebook</span>
-                    {providers?.facebook?.email && <p className="text-xs text-slate-400">{providers.facebook.email}</p>}
+                {(ENABLE_FACEBOOK_LOGIN || providers?.facebook?.connected) && (
+                  <div className="flex items-center justify-between p-3 bg-slate-900/50 rounded-xl border border-white/5">
+                    <div>
+                      <span className="text-sm font-bold text-white">Facebook</span>
+                      {providers?.facebook?.email && <p className="text-xs text-slate-400">{providers.facebook.email}</p>}
+                    </div>
+                    {providers?.facebook?.connected ? (
+                      <button onClick={() => handleUnlinkProvider('facebook')} className="text-xs text-rose-400 font-bold border border-rose-500/30 px-3 py-1 rounded-lg hover:bg-rose-500/10 transition-colors">Disconnect</button>
+                    ) : (
+                      <button onClick={() => handleLinkProvider('facebook')} className="text-xs text-[#1877F2] font-bold border border-[#1877F2]/30 px-3 py-1 rounded-lg hover:bg-[#1877F2]/10 transition-colors">Connect</button>
+                    )}
                   </div>
-                  {providers?.facebook?.connected ? (
-                    <button onClick={() => handleUnlinkProvider('facebook')} className="text-xs text-rose-400 font-bold border border-rose-500/30 px-3 py-1 rounded-lg hover:bg-rose-500/10 transition-colors">Disconnect</button>
-                  ) : (
-                    <button onClick={() => handleLinkProvider('facebook')} className="text-xs text-[#1877F2] font-bold border border-[#1877F2]/30 px-3 py-1 rounded-lg hover:bg-[#1877F2]/10 transition-colors">Connect</button>
-                  )}
-                </div>
+                )}
 
                 <div className="flex items-center justify-between p-3 bg-slate-900/50 rounded-xl border border-white/5">
                   <div>

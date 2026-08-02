@@ -3,21 +3,33 @@ import { useRoomStore } from '../../stores/useRoomStore';
 import { useGameStore } from '../../stores/useGameStore';
 import { socketService } from '../../services/socket.service';
 import { SOCKET_EVENTS, ChatMessage } from '../../types';
-import { MessageSquare, Send, ChevronDown, ChevronUp } from 'lucide-react';
+import { useSocialStore } from '../../stores/useSocialStore';
+import { MessageSquare, Send, ChevronDown, ChevronUp, Users } from 'lucide-react';
 
 export const ChatBox: React.FC = () => {
-  const { chatMessages, addChatMessage, currentRoom } = useRoomStore();
+  const { chatMessages, teamMessages, addChatMessage, addTeamMessage, currentRoom } = useRoomStore();
   const showChat = useGameStore((state) => state.showChat);
+  const { currentParty, partyMessages, addPartyMessage } = useSocialStore();
+  
   const [inputMsg, setInputMsg] = useState('');
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [cooldown, setCooldown] = useState(false);
+  const [activeTab, setActiveTab] = useState<'room' | 'party' | 'team'>('room');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const allowChat = currentRoom?.allowChat !== false;
 
   useEffect(() => {
     const handleMessage = (msg: ChatMessage) => {
-      addChatMessage(msg);
+      // Assuming server sends Party messages as a different event or type, but we will reuse CHAT_MESSAGE with a partyId if we implemented it.
+      // For this phase, if we receive a party chat, we add it to party messages. We didn't add party chat on server yet, so we'll just implement the UI tab.
+      if ((msg as any).target === 'party') {
+        addPartyMessage(msg);
+      } else if ((msg as any).target === 'team') {
+        addTeamMessage(msg);
+      } else {
+        addChatMessage(msg);
+      }
     };
 
     socketService.on(SOCKET_EVENTS.CHAT_MESSAGE, handleMessage);
@@ -40,7 +52,7 @@ export const ChatBox: React.FC = () => {
     const trimmed = inputMsg.trim();
     if (!trimmed || cooldown) return;
 
-    socketService.emit(SOCKET_EVENTS.CHAT_MESSAGE, { message: trimmed });
+    socketService.emit(SOCKET_EVENTS.CHAT_MESSAGE, { message: trimmed, target: activeTab });
     setInputMsg('');
     setCooldown(true);
     setTimeout(() => setCooldown(false), 500);
@@ -59,21 +71,60 @@ export const ChatBox: React.FC = () => {
             Concert Chat ({chatMessages.length})
           </span>
         </div>
-        <button className="text-slate-400 hover:text-white">
-          {isCollapsed ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-        </button>
+        <div className="flex items-center">
+          {isCollapsed ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+        </div>
       </div>
 
-      {/* Chat Body */}
       {!isCollapsed && (
         <>
+          {/* Tabs */}
+          <div className="flex bg-slate-900 border-b border-white/5">
+            <button
+              onClick={() => setActiveTab('room')}
+              className={`flex-1 py-1.5 text-xs font-bold transition-colors ${activeTab === 'room' ? 'text-neon-pink bg-white/5' : 'text-slate-400 hover:text-slate-200'}`}
+            >
+              Room
+            </button>
+            <button
+              onClick={() => setActiveTab('party')}
+              className={`flex-1 py-1.5 text-xs font-bold transition-colors ${activeTab === 'party' ? 'text-neon-purple bg-white/5' : 'text-slate-400 hover:text-slate-200'}`}
+            >
+              <Users className="w-3.5 h-3.5 inline mr-1" /> Party
+            </button>
+            <button
+              onClick={() => setActiveTab('team')}
+              className={`flex-1 py-1.5 text-xs font-bold transition-colors ${activeTab === 'team' ? 'text-neon-cyan bg-white/5' : 'text-slate-400 hover:text-slate-200'}`}
+            >
+              Team
+            </button>
+          </div>
+          
+          {/* Chat Messages */}
           <div className="flex flex-col gap-2 p-3.5 h-48 overflow-y-auto text-xs">
-            {chatMessages.length === 0 ? (
+            {activeTab === 'room' && chatMessages.length === 0 && (
               <p className="text-slate-500 italic text-center my-auto">
                 No messages yet. Say hello to the concert!
               </p>
-            ) : (
-              chatMessages.map((msg) => {
+            )}
+            {activeTab === 'party' && !currentParty && (
+              <p className="text-slate-500 italic text-center my-auto">
+                You are not in a party.
+              </p>
+            )}
+            {activeTab === 'party' && currentParty && partyMessages.length === 0 && (
+              <p className="text-slate-500 italic text-center my-auto">
+                Party chat is empty.
+              </p>
+            )}
+
+            {activeTab === 'team' && teamMessages.length === 0 && (
+              <p className="text-slate-500 italic text-center my-auto">
+                No messages in team chat.
+              </p>
+            )}
+
+            {(activeTab === 'room' ? chatMessages : activeTab === 'team' ? teamMessages : partyMessages).map((msg) => {
                 const isSystem = msg.type === 'system' || msg.isSystem;
                 const content = msg.message || msg.text || '';
                 const timeStr = new Date(msg.timestamp || msg.sentAt || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -95,7 +146,7 @@ export const ChatBox: React.FC = () => {
                   </div>
                 );
               })
-            )}
+            }
             <div ref={messagesEndRef} />
           </div>
 

@@ -1,13 +1,17 @@
 import React, { useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import { AvatarType, DanceAnimationType } from '../../types';
+import { AvatarType, DanceAnimationType, AvatarCustomization } from '../../../../shared/types';
 import { AvatarAccessories } from './AvatarAccessories';
 import { AvatarFace } from './AvatarFace';
 import { AvatarOutfit } from './AvatarOutfit';
+import { Lightstick } from './Lightstick';
+import { resolveColor, BODY_COLORS, SHOE_COLORS, OUTFIT_COLORS, LIGHTSTICK_COLORS } from './avatarCosmetics';
+import { CelestialQueenAvatar } from './CelestialQueenAvatar';
 
 interface AvatarPrimitiveProps {
   avatarType: AvatarType;
+  avatarConfig?: AvatarCustomization;
   animation?: DanceAnimationType;
   isPreview?: boolean;
   scale?: number;
@@ -19,6 +23,10 @@ interface AvatarPrimitiveProps {
   audienceMotion?: boolean;
   stageDancer?: boolean;
   animationClock?: () => number;
+  equippedLightstick?: boolean;
+  lightstickColor?: string;
+  animationTimeOffset?: number;
+  team?: 'cyan' | 'pink';
 }
 
 export const AVATAR_CONFIGS: Record<AvatarType, {
@@ -82,12 +90,20 @@ export const AVATAR_CONFIGS: Record<AvatarType, {
     primaryColor: '#24D26D',
     secondaryColor: '#087F5B',
     accentColor: '#FFD84D',
-    description: 'Prehistoric party beast with stomping moves.'
+    description: 'A prehistoric dancer with modern moves.'
+  },
+  CelestialQueen: {
+    name: 'Celestial Queen',
+    primaryColor: '#FFFFFF',
+    secondaryColor: '#FFD700',
+    accentColor: '#00F0FF',
+    description: 'The majestic animated queen of the DanceVerse.'
   }
 };
 
 export const AvatarPrimitive: React.FC<AvatarPrimitiveProps> = ({
   avatarType,
+  avatarConfig,
   animation = 'Idle',
   isPreview = false,
   scale = 1,
@@ -98,8 +114,16 @@ export const AvatarPrimitive: React.FC<AvatarPrimitiveProps> = ({
   simplified = false,
   audienceMotion = false,
   stageDancer = false,
-  animationClock
+  animationClock,
+  equippedLightstick = false,
+  lightstickColor = '#8ffcff',
+  animationTimeOffset = 0,
+  team
 }) => {
+  const isCelestialQueen = avatarType === 'CelestialQueen' || avatarType === ('celestial_queen' as any);
+  
+  // Override lightstick color if team is assigned
+  const effectiveLightstickColor = team === 'cyan' ? '#00ffff' : team === 'pink' ? '#ff1493' : lightstickColor;
   const groupRef = useRef<THREE.Group>(null);
   const visualRootRef = useRef<THREE.Group>(null);
   const headRef = useRef<THREE.Group>(null);
@@ -108,13 +132,28 @@ export const AvatarPrimitive: React.FC<AvatarPrimitiveProps> = ({
   const accessoryRef = useRef<THREE.Group>(null);
   const leftArmRef = useRef<THREE.Group>(null);
   const rightArmRef = useRef<THREE.Group>(null);
+  const rightHandAnchorRef = useRef<THREE.Group>(null);
   const leftLegRef = useRef<THREE.Group>(null);
   const rightLegRef = useRef<THREE.Group>(null);
 
-  const config = AVATAR_CONFIGS[avatarType] || AVATAR_CONFIGS.Boy;
+  const config = React.useMemo(() => {
+    const base = AVATAR_CONFIGS[avatarType] || AVATAR_CONFIGS.Boy;
+    if (avatarConfig) {
+      return {
+        primaryColor: resolveColor(BODY_COLORS, avatarConfig.bodyColor, base.primaryColor),
+        secondaryColor: resolveColor(OUTFIT_COLORS, avatarConfig.outfitColor, base.secondaryColor),
+        accentColor: '#FFE45E', // Default accent
+        shoeColor: resolveColor(SHOE_COLORS, avatarConfig.shoesColor, base.primaryColor),
+      };
+    }
+    return { ...base, shoeColor: avatarType === 'Girl' || avatarType === 'Bunny' ? base.primaryColor : '#111827' };
+  }, [avatarType, avatarConfig]);
 
-  useFrame((state) => {
-    const time = (animationClock ? animationClock() : state.clock.getElapsedTime()) + phase;
+  const limbColor = avatarConfig ? config.primaryColor : (avatarType === 'Panda' ? '#111827' : config.primaryColor);
+  const shoeColor = config.shoeColor;
+
+  useFrame((state, delta) => {
+    const time = (animationClock ? animationClock() : state.clock.getElapsedTime()) + phase + animationTimeOffset;
 
     if (isPreview && groupRef.current) {
       groupRef.current.rotation.y = Math.sin(time * 0.45) * 0.2;
@@ -138,140 +177,195 @@ export const AvatarPrimitive: React.FC<AvatarPrimitiveProps> = ({
       const leftLeg = leftLegRef.current;
       const rightLeg = rightLegRef.current;
 
-      group.position.set(0, 0, 0);
-      group.rotation.x = 0;
-      group.rotation.z = 0;
-      if (!isPreview) group.rotation.y = 0;
+      let tgY = 0, tgRotY = 0, tgRotZ = 0, tgRotX = 0;
+      let ttRotX = 0, ttRotY = 0, ttRotZ = 0;
+      let thRotX = 0, thRotY = 0, thRotZ = 0;
+      let tlaRotX = 0, tlaRotZ = 0.12, tlaRotY = 0;
+      let traRotX = 0, traRotZ = -0.12, traRotY = 0;
+      let tllRotX = 0, tllRotZ = 0;
+      let trlRotX = 0, trlRotZ = 0;
+      let torsoScaleY = 1;
 
-      torso.position.y = 0.68;
-      torso.rotation.set(0, 0, 0);
-      torso.scale.set(1, 1, 1);
-      head.position.set(0, 1.47, 0);
-      head.rotation.set(0, 0, 0);
-      leftArm.rotation.set(0, 0, 0.12);
-      rightArm.rotation.set(0, 0, -0.12);
-      leftLeg.rotation.set(0, 0, 0);
-      rightLeg.rotation.set(0, 0, 0);
+      if (isPreview) tgRotY = Math.sin(time * 0.45) * 0.2;
 
-      if (animation === 'Idle') {
+      // Base logic map
+      const baseAnim = animation.split('-')[0]; // e.g. "dance"
+      const animType = animation; // Full string
+
+      if (animType === 'Idle' || animType === 'dance-idle') {
         if (audienceMotion) {
           const sway = Math.sin(time * 2.1);
           const bounce = Math.abs(Math.sin(time * 2.1));
           const leftLift = 0.5 + Math.sin(time * 1.35) * 0.5;
           const rightLift = 1 - leftLift;
 
-          group.position.y = bounce * 0.07;
-          torso.rotation.z = sway * 0.075;
-          head.rotation.z = -sway * 0.06;
-          head.position.y += bounce * 0.025;
-          leftArm.rotation.x = sway * 0.18;
-          rightArm.rotation.x = -sway * 0.18;
-          leftArm.rotation.z = 0.12 - leftLift * 0.72;
-          rightArm.rotation.z = -0.12 + rightLift * 0.72;
-          leftLeg.rotation.z = -sway * 0.035;
-          rightLeg.rotation.z = sway * 0.035;
+          tgY = bounce * 0.07;
+          ttRotZ = sway * 0.075;
+          thRotZ = -sway * 0.06;
+          tlaRotX = sway * 0.18;
+          traRotX = -sway * 0.18;
+          tlaRotZ = 0.12 - leftLift * 0.72;
+          traRotZ = -0.12 + rightLift * 0.72;
+          tllRotZ = -sway * 0.035;
+          trlRotZ = sway * 0.035;
         } else {
-          const breathe = Math.sin(time * 2.6);
-          leftArm.rotation.x = breathe * 0.12;
-          rightArm.rotation.x = -breathe * 0.12;
-          head.position.y += breathe * 0.035;
-          torso.scale.y = 1 + breathe * 0.025;
+          const breathe = Math.sin(time * (animType === 'dance-idle' ? 4 : 2.6));
+          const bounce = Math.abs(breathe);
+          tlaRotX = breathe * 0.12;
+          traRotX = -breathe * 0.12;
+          torsoScaleY = 1 + breathe * 0.025;
+          if (animType === 'dance-idle') {
+            tgY = bounce * 0.05;
+            ttRotZ = Math.sin(time * 2) * 0.05;
+          }
         }
-      } else if (animation === 'Walk' || animation === 'Run') {
-        const speed = animation === 'Run' ? 12 : 7;
+      } else if (animType === 'Walk' || animType === 'Run') {
+        const speed = animType === 'Run' ? 12 : 7;
         const stride = Math.sin(time * speed);
-        leftArm.rotation.x = stride * 0.75;
-        rightArm.rotation.x = -stride * 0.75;
-        leftLeg.rotation.x = -stride * 0.65;
-        rightLeg.rotation.x = stride * 0.65;
-        group.position.y = Math.abs(Math.cos(time * speed)) * 0.06;
-        torso.rotation.z = stride * 0.06;
-      } else if (animation === 'Jump') {
-        if (!isPreview) group.position.y = Math.abs(Math.sin(time * 6)) * 1.25;
-        leftArm.rotation.z = -2.45;
-        rightArm.rotation.z = 2.45;
-        leftLeg.rotation.x = 0.35;
-        rightLeg.rotation.x = 0.35;
-      } else if (animation === 'Wave') {
-        rightArm.rotation.z = 2.45 + Math.sin(time * 8) * 0.3;
-        leftArm.rotation.z = 0.2;
-        head.rotation.z = Math.sin(time * 3) * 0.08;
-      } else if (animation === 'HipHop') {
-        const beat = Math.sin(time * 6.2);
-        head.rotation.z = beat * 0.18;
-        torso.rotation.y = beat * 0.18;
-        torso.rotation.z = beat * 0.1;
-        leftArm.rotation.x = beat * 1.0;
-        leftArm.rotation.z = 0.55;
-        rightArm.rotation.x = Math.cos(time * 6.2) * 1.0;
-        rightArm.rotation.z = -0.55;
-        leftLeg.rotation.z = -beat * 0.18;
-        rightLeg.rotation.z = beat * 0.18;
-        if (!isPreview) group.position.y = Math.abs(beat) * 0.28;
-      } else if (animation === 'Shuffle') {
-        const step = Math.sin(time * 8);
-        group.position.x = step * 0.16;
-        group.position.y = Math.abs(Math.cos(time * 8)) * 0.13;
-        torso.rotation.z = -step * 0.14;
-        head.rotation.y = step * 0.16;
-        leftArm.rotation.x = -step * 0.65;
-        rightArm.rotation.x = step * 0.65;
-        leftLeg.rotation.z = step * 0.34;
-        rightLeg.rotation.z = -step * 0.34;
-      } else if (animation === 'Cheer') {
-        const bounce = Math.abs(Math.sin(time * 5.2));
-        group.position.y = bounce * 0.34;
-        leftArm.rotation.z = -2.45 + Math.sin(time * 5.2) * 0.14;
-        rightArm.rotation.z = 2.45 - Math.sin(time * 5.2) * 0.14;
-        leftLeg.rotation.z = -0.16;
-        rightLeg.rotation.z = 0.16;
-        head.rotation.x = -0.1;
-      } else if (animation === 'RandomDance') {
-        const beat = Math.sin(time * 7.2);
-        const sway = Math.sin(time * 3.6);
-        group.position.y = Math.abs(beat) * 0.22;
-        group.rotation.y = !isPreview ? sway * 0.3 : group.rotation.y;
-        torso.rotation.z = sway * 0.22;
-        head.rotation.z = -sway * 0.2;
-        leftArm.rotation.set(beat * 0.7, 0, 0.9 + sway * 0.45);
-        rightArm.rotation.set(-beat * 0.7, 0, -0.9 + sway * 0.45);
-        leftLeg.rotation.x = -beat * 0.45;
-        rightLeg.rotation.x = beat * 0.45;
-      } else if (animation === 'Spin') {
-        if (!isPreview) group.rotation.y = time * 8;
-        leftArm.rotation.z = 1.2;
-        rightArm.rotation.z = -1.2;
-      } else if (animation === 'Breakdance') {
-        if (!isPreview) {
-          group.rotation.z = Math.sin(time * 4) * 0.55;
-          group.rotation.y = time * 6;
-          group.position.y = 0.18;
+        tlaRotX = stride * 0.75;
+        traRotX = -stride * 0.75;
+        tllRotX = -stride * 0.65;
+        trlRotX = stride * 0.65;
+        tgY = Math.abs(Math.cos(time * speed)) * 0.06;
+        ttRotZ = stride * 0.06;
+      } else if (animType === 'Jump') {
+        if (!isPreview) tgY = Math.abs(Math.sin(time * 6)) * 1.25;
+        tlaRotZ = -2.45;
+        traRotZ = 2.45;
+        tllRotX = 0.35;
+        trlRotX = 0.35;
+      } else if (animType === 'Wave' || animType === 'WaveLightstick') {
+        if (animType === 'WaveLightstick') {
+          traRotZ = 2.8 + Math.sin(time * 3) * 0.4;
+          traRotX = -0.2;
+        } else {
+          traRotZ = 2.45 + Math.sin(time * 8) * 0.3;
         }
-        leftArm.rotation.z = 1.15;
-        rightArm.rotation.z = -1.15;
-      } else if (animation === 'Clap') {
-        const clap = Math.abs(Math.sin(time * 10));
-        leftArm.rotation.z = 0.35 + clap * 0.5;
-        rightArm.rotation.z = -0.35 - clap * 0.5;
-        leftArm.rotation.x = -0.45;
-        rightArm.rotation.x = -0.45;
-        head.position.y += clap * 0.05;
-      } else if (animation === 'Moonwalk') {
-        const glide = Math.sin(time * 5.5);
-        group.position.x = glide * 0.2;
-        torso.rotation.z = -glide * 0.12;
-        leftArm.rotation.x = glide * 0.7;
-        rightArm.rotation.x = -glide * 0.7;
-        leftLeg.rotation.x = -Math.max(0, glide) * 0.6;
-        rightLeg.rotation.x = Math.min(0, glide) * 0.6;
+        tlaRotZ = 0.2 + (animType === 'WaveLightstick' ? Math.sin(time * 2) * 0.1 : 0);
+        thRotZ = Math.sin(time * 3) * 0.08;
+        if (animType === 'WaveLightstick') tgY = Math.abs(Math.sin(time * 4)) * 0.05;
+      } else if (animType === 'HipHop') {
+        const beat = Math.sin(time * 6.2);
+        thRotZ = beat * 0.18;
+        ttRotY = beat * 0.18;
+        ttRotZ = beat * 0.1;
+        tlaRotX = beat * 1.0;
+        tlaRotZ = 0.55;
+        traRotX = Math.cos(time * 6.2) * 1.0;
+        traRotZ = -0.55;
+        tllRotZ = -beat * 0.18;
+        trlRotZ = beat * 0.18;
+        if (!isPreview) tgY = Math.abs(beat) * 0.28;
+      } else if (animType === 'Shuffle') {
+        const step = Math.sin(time * 8);
+        if (!isPreview) group.position.x = step * 0.16;
+        tgY = Math.abs(Math.cos(time * 8)) * 0.13;
+        ttRotZ = -step * 0.14;
+        thRotY = step * 0.16;
+        tlaRotX = -step * 0.65;
+        traRotX = step * 0.65;
+        tllRotZ = step * 0.34;
+        trlRotZ = -step * 0.34;
+      } else if (animType === 'Breakdance') {
+        if (!isPreview) {
+          tgRotZ = Math.sin(time * 4) * 0.55;
+          tgRotY = time * 6;
+          tgY = 0.18;
+        }
+        tlaRotZ = 1.15;
+        traRotZ = -1.15;
+      } else if (animType.includes('dance-basic')) {
+        const beat = Math.sin(time * 8);
+        tgY = Math.abs(beat) * 0.1;
+        ttRotZ = Math.cos(time * 4) * 0.15;
+        tlaRotX = beat * 0.5;
+        traRotX = -beat * 0.5;
+      } else if (animType.includes('dance-medium')) {
+        const beat = Math.sin(time * 10);
+        tgY = Math.abs(beat) * 0.2;
+        thRotZ = beat * 0.2;
+        ttRotY = beat * 0.3;
+        tlaRotX = beat * 0.8;
+        tlaRotZ = 0.4;
+        traRotX = -beat * 0.8;
+        traRotZ = -0.4;
+        tllRotZ = -beat * 0.2;
+        trlRotZ = beat * 0.2;
+      } else if (animType.includes('dance-advanced') || animType.includes('group-dance')) {
+        const beat = Math.sin(time * 12);
+        tgY = Math.abs(beat) * 0.3;
+        if (!isPreview) tgRotY = Math.sin(time * 6) * 0.5;
+        ttRotZ = beat * 0.3;
+        tlaRotZ = 1.5 + beat * 0.5;
+        traRotZ = -1.5 - beat * 0.5;
+        tlaRotX = -0.5;
+        traRotX = -0.5;
+        tllRotX = -beat * 0.5;
+        trlRotX = beat * 0.5;
+      } else if (animType.includes('dance-signature') || animType.includes('dance-perfect')) {
+        if (!isPreview) tgRotY = time * 10;
+        tgY = Math.abs(Math.sin(time * 5)) * 0.4;
+        tlaRotZ = 2.5;
+        traRotZ = -2.5;
+        tllRotZ = 0.2;
+        trlRotZ = -0.2;
+      } else if (animType.includes('dance-fever')) {
+        const beat = Math.sin(time * 15);
+        tgY = Math.abs(beat) * 0.5;
+        thRotX = beat * 0.3;
+        ttRotX = beat * 0.4;
+        tlaRotX = -1.5 + beat * 0.5;
+        traRotX = -1.5 + beat * 0.5;
       } else {
         const pulse = Math.sin(time * 7);
-        leftArm.rotation.x = pulse * 0.7;
-        rightArm.rotation.x = -pulse * 0.7;
-        leftLeg.rotation.x = -pulse * 0.5;
-        rightLeg.rotation.x = pulse * 0.5;
-        if (!isPreview) group.position.y = Math.abs(pulse) * 0.25;
+        tlaRotX = pulse * 0.7;
+        traRotX = -pulse * 0.7;
+        tllRotX = -pulse * 0.5;
+        trlRotX = pulse * 0.5;
+        if (!isPreview) tgY = Math.abs(pulse) * 0.25;
       }
+
+      // Lightstick Override
+      if (equippedLightstick && (animType === 'Idle' || animType === 'Walk' || animType === 'Run' || animType === 'dance-idle')) {
+        const sway = Math.sin(time * 2.1);
+        const rightLift = 0.5 - Math.sin(time * 1.35) * 0.5;
+        traRotX = -0.5 + sway * 0.1;
+        traRotZ = 0.2 + rightLift * 0.5;
+      } else if (equippedLightstick) {
+        // Safe hand position for fast moves
+        traRotX = -0.8;
+        traRotZ = -0.3;
+      }
+
+      // Apply Damping
+      const dampSpd = 12;
+      group.position.y = THREE.MathUtils.damp(group.position.y, tgY, dampSpd, delta);
+      group.rotation.x = THREE.MathUtils.damp(group.rotation.x, tgRotX, dampSpd, delta);
+      group.rotation.y = THREE.MathUtils.damp(group.rotation.y, tgRotY, dampSpd, delta);
+      group.rotation.z = THREE.MathUtils.damp(group.rotation.z, tgRotZ, dampSpd, delta);
+      
+      torso.rotation.x = THREE.MathUtils.damp(torso.rotation.x, ttRotX, dampSpd, delta);
+      torso.rotation.y = THREE.MathUtils.damp(torso.rotation.y, ttRotY, dampSpd, delta);
+      torso.rotation.z = THREE.MathUtils.damp(torso.rotation.z, ttRotZ, dampSpd, delta);
+      torso.scale.y = THREE.MathUtils.damp(torso.scale.y, torsoScaleY, dampSpd, delta);
+
+      head.rotation.x = THREE.MathUtils.damp(head.rotation.x, thRotX, dampSpd, delta);
+      head.rotation.y = THREE.MathUtils.damp(head.rotation.y, thRotY, dampSpd, delta);
+      head.rotation.z = THREE.MathUtils.damp(head.rotation.z, thRotZ, dampSpd, delta);
+
+      leftArm.rotation.x = THREE.MathUtils.damp(leftArm.rotation.x, tlaRotX, dampSpd, delta);
+      leftArm.rotation.y = THREE.MathUtils.damp(leftArm.rotation.y, tlaRotY, dampSpd, delta);
+      leftArm.rotation.z = THREE.MathUtils.damp(leftArm.rotation.z, tlaRotZ, dampSpd, delta);
+
+      rightArm.rotation.x = THREE.MathUtils.damp(rightArm.rotation.x, traRotX, dampSpd, delta);
+      rightArm.rotation.y = THREE.MathUtils.damp(rightArm.rotation.y, traRotY, dampSpd, delta);
+      rightArm.rotation.z = THREE.MathUtils.damp(rightArm.rotation.z, traRotZ, dampSpd, delta);
+
+      leftLeg.rotation.x = THREE.MathUtils.damp(leftLeg.rotation.x, tllRotX, dampSpd, delta);
+      leftLeg.rotation.z = THREE.MathUtils.damp(leftLeg.rotation.z, tllRotZ, dampSpd, delta);
+      
+      rightLeg.rotation.x = THREE.MathUtils.damp(rightLeg.rotation.x, trlRotX, dampSpd, delta);
+      rightLeg.rotation.z = THREE.MathUtils.damp(rightLeg.rotation.z, trlRotZ, dampSpd, delta);
 
       if (stageDancer && animation !== 'Idle') {
         const stagePulse = Math.sin(time * 6.2);
@@ -286,7 +380,11 @@ export const AvatarPrimitive: React.FC<AvatarPrimitiveProps> = ({
       }
 
       const secondaryBounce = Math.sin(time * 3.4) * 0.5 + 0.5;
-      head.position.y += secondaryBounce * 0.012;
+      head.position.y = 1.47 + secondaryBounce * 0.012;
+      
+      // Also apply rotation offset directly to the target before damping, or just assign it after damping, but let's just make sure it doesn't accumulate 
+      // Actually head.rotation.z is damped on line 354, so += is stable but it's cleaner to just not do it, 
+      // or we can leave head.rotation.z alone if it wasn't the bug. The head.position.y was the bug.
       head.rotation.z += Math.sin(time * 1.8) * 0.018;
 
       if (visualRootRef.current) {
@@ -311,8 +409,14 @@ export const AvatarPrimitive: React.FC<AvatarPrimitiveProps> = ({
     }
   });
 
-  const limbColor = avatarType === 'Panda' ? '#111827' : config.primaryColor;
-  const shoeColor = avatarType === 'Girl' || avatarType === 'Bunny' ? config.primaryColor : '#111827';
+
+  if (avatarType === 'CelestialQueen') {
+    return (
+      <group ref={groupRef} position={[0, scale * 0.1, 0]}>
+        <CelestialQueenAvatar animation={animation} scale={scale} />
+      </group>
+    );
+  }
 
   return (
     <group ref={groupRef} scale={scale}>
@@ -343,6 +447,7 @@ export const AvatarPrimitive: React.FC<AvatarPrimitiveProps> = ({
 
           <AvatarFace
             avatarType={avatarType}
+            avatarConfig={avatarConfig}
             primaryColor={config.primaryColor}
             secondaryColor={config.secondaryColor}
             accentColor={config.accentColor}
@@ -351,6 +456,7 @@ export const AvatarPrimitive: React.FC<AvatarPrimitiveProps> = ({
           />
           <AvatarAccessories
             avatarType={avatarType}
+            avatarConfig={avatarConfig}
             primaryColor={config.primaryColor}
             secondaryColor={config.secondaryColor}
             accentColor={config.accentColor}
@@ -366,6 +472,7 @@ export const AvatarPrimitive: React.FC<AvatarPrimitiveProps> = ({
           </mesh>
           <AvatarOutfit
             avatarType={avatarType}
+            avatarConfig={avatarConfig}
             primaryColor={config.primaryColor}
             secondaryColor={config.secondaryColor}
             accentColor={config.accentColor}
@@ -396,6 +503,18 @@ export const AvatarPrimitive: React.FC<AvatarPrimitiveProps> = ({
               <meshStandardMaterial color={config.accentColor} roughness={0.38} />
             </mesh>
           )}
+          {/* Hand Anchor point */}
+          <group ref={rightHandAnchorRef} position={[0, -0.39, 0]}>
+            {equippedLightstick && (
+              <group rotation={[Math.PI - 0.5, 0, 0]}>
+                <Lightstick 
+                  color={team ? effectiveLightstickColor : (avatarConfig ? resolveColor(LIGHTSTICK_COLORS, avatarConfig.lightstickColor, effectiveLightstickColor) : effectiveLightstickColor)} 
+                  isWaving={animation === 'WaveLightstick'} 
+                  simplified={simplified} 
+                />
+              </group>
+            )}
+          </group>
         </group>
 
         <group ref={leftLegRef} position={[-0.19, 0.38, 0]}>
@@ -459,6 +578,20 @@ export const AvatarPrimitive: React.FC<AvatarPrimitiveProps> = ({
           <mesh position={[0, 0.52, -0.52]} rotation={[0.58, 0, 0]} scale={[1, 1.35, 1]}>
             <coneGeometry args={[0.24, 0.76, 12]} />
             <meshStandardMaterial color={config.primaryColor} roughness={0.42} />
+          </mesh>
+        )}
+        
+        {/* Team Floor Glow */}
+        {team && !simplified && (
+          <mesh position={[0, 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+            <ringGeometry args={[0.5, 0.6, 32]} />
+            <meshBasicMaterial 
+              color={team === 'cyan' ? '#00ffff' : '#ff1493'} 
+              transparent 
+              opacity={0.8}
+              blending={THREE.AdditiveBlending}
+              side={THREE.DoubleSide}
+            />
           </mesh>
         )}
       </group>

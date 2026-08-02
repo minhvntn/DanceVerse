@@ -2,6 +2,12 @@ import React, { useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { ConcertVisualState, STAGE_COLORS } from '../stageVisuals';
+import { BeatClock } from '../BeatClock';
+import {
+  AUDIENCE_PODIUM_CENTER_Z,
+  AUDIENCE_PODIUM_STEPS,
+  AUDIENCE_RUNWAY
+} from '../audienceElevation';
 
 interface AudienceAreaProps {
   visualState: ConcertVisualState;
@@ -17,7 +23,8 @@ export const AudienceArea: React.FC<AudienceAreaProps> = ({ visualState }) => {
 
   useFrame(({ clock }) => {
     const time = clock.getElapsedTime();
-    const pulse = visualState.isPlaying ? 0.42 + Math.sin(time * 3.2) * 0.18 : 0.12;
+    const { beatPhase, isPaused } = BeatClock.getState();
+    const pulse = isPaused ? 0.12 : 0.42 + Math.max(0, 1 - beatPhase * 3) * 0.3;
     if (floorRef.current) floorRef.current.emissiveIntensity = pulse;
     gridRef.current?.children.forEach((child, index) => {
       const material = (child as THREE.Mesh).material as THREE.MeshBasicMaterial;
@@ -72,30 +79,79 @@ export const AudienceArea: React.FC<AudienceAreaProps> = ({ visualState }) => {
         )))}
       </group>
 
-      <mesh position={[0, 0.08, 0.45]} receiveShadow>
-        <boxGeometry args={[7.8, 0.16, 17]} />
+      <mesh
+        position={[
+          AUDIENCE_RUNWAY.centerX,
+          AUDIENCE_RUNWAY.topElevation / 2,
+          AUDIENCE_RUNWAY.centerZ
+        ]}
+        receiveShadow
+      >
+        <boxGeometry args={[
+          AUDIENCE_RUNWAY.width,
+          AUDIENCE_RUNWAY.topElevation,
+          AUDIENCE_RUNWAY.depth
+        ]} />
         <meshStandardMaterial color="#070A14" emissive="#140D33" emissiveIntensity={visualState.energy * 0.6} metalness={0.86} roughness={0.18} />
       </mesh>
-      {[-3.72, 3.72].map((x, index) => (
-        <mesh key={x} position={[x, 0.18, 0.45]}>
-          <boxGeometry args={[0.1, 0.08, 17]} />
+      {[-1, 1].map((side, index) => (
+        <mesh
+          key={side}
+          position={[
+            side * (AUDIENCE_RUNWAY.width / 2 - 0.18),
+            AUDIENCE_RUNWAY.topElevation + 0.02,
+            AUDIENCE_RUNWAY.centerZ
+          ]}
+        >
+          <boxGeometry args={[0.1, 0.08, AUDIENCE_RUNWAY.depth]} />
           <meshBasicMaterial color={index === 0 ? '#00F0FF' : '#FF007F'} toneMapped={false} />
         </mesh>
       ))}
 
-      <group position={[0, 0.16, 9.55]}>
-        <mesh receiveShadow>
-          <cylinderGeometry args={[5.25, 5.65, 0.28, 12]} />
-          <meshStandardMaterial color="#080A18" emissive="#170C38" emissiveIntensity={0.34 + visualState.energy * 0.55} metalness={0.88} roughness={0.16} />
-        </mesh>
-        <mesh position={[0, 0.16, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-          <ringGeometry args={[4.5, 5.05, 48]} />
-          <meshBasicMaterial color={visualState.isBeatDrop ? '#FFFFFF' : '#9D5CFF'} transparent opacity={0.42 + visualState.energy * 0.4} toneMapped={false} />
-        </mesh>
+      <group position={[0, 0, AUDIENCE_PODIUM_CENTER_Z]}>
+        {AUDIENCE_PODIUM_STEPS.map((step, index) => (
+          <React.Fragment key={step.id}>
+            <mesh
+              position={[0, step.topElevation / 2, 0]}
+              castShadow
+              receiveShadow
+            >
+              <cylinderGeometry args={[step.radius, step.radius, step.topElevation, 64]} />
+              <meshStandardMaterial
+                color={step.color}
+                emissive={index === 2 ? '#170C38' : '#07152C'}
+                emissiveIntensity={0.18 + visualState.energy * (0.2 + index * 0.1)}
+                metalness={0.88}
+                roughness={0.16 + index * 0.02}
+              />
+            </mesh>
+            <mesh
+              position={[0, step.topElevation + 0.008, 0]}
+              rotation={[-Math.PI / 2, 0, 0]}
+            >
+              <ringGeometry args={[step.radius - 0.11, step.radius, 64]} />
+              <meshBasicMaterial
+                color={visualState.isBeatDrop && index === 2 ? '#FFFFFF' : step.rimColor}
+                transparent
+                opacity={0.48 + visualState.energy * 0.38}
+                toneMapped={false}
+              />
+            </mesh>
+          </React.Fragment>
+        ))}
+
         {Array.from({ length: 8 }, (_, index) => {
           const angle = (index / 8) * Math.PI * 2;
+          const mainStep = AUDIENCE_PODIUM_STEPS[2];
           return (
-            <mesh key={index} position={[Math.cos(angle) * 4.8, 0.38, Math.sin(angle) * 4.8]}>
+            <mesh
+              key={index}
+              position={[
+                Math.cos(angle) * (mainStep.radius - 0.22),
+                mainStep.topElevation + 0.12,
+                Math.sin(angle) * (mainStep.radius - 0.22)
+              ]}
+            >
               <sphereGeometry args={[0.11, 10, 10]} />
               <meshBasicMaterial color={STAGE_COLORS[index % STAGE_COLORS.length]} toneMapped={false} />
             </mesh>

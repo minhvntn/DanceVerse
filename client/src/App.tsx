@@ -9,6 +9,9 @@ import { AvatarSelectPage } from './pages/AvatarSelectPage';
 import { LobbyPage } from './pages/LobbyPage';
 import { GamePage } from './pages/GamePage';
 import { OAuthCallbackPage } from './pages/OAuthCallbackPage';
+import { AvatarCustomizer } from './pages/AvatarCustomizer';
+import { ProfilePage } from './pages/ProfilePage';
+import { DJControlRoom } from './pages/DJControlRoom';
 
 export const App: React.FC = () => {
   const pageStep = useGameStore((state) => state.pageStep);
@@ -74,6 +77,9 @@ export const App: React.FC = () => {
       {pageStep === 'lobby' && <LobbyPage />}
       {pageStep === 'game' && <GamePage />}
       {pageStep === 'oauth' && <OAuthCallbackPage />}
+      {pageStep === 'customize' && <AvatarCustomizer />}
+      {pageStep === 'profile' && <ProfilePage />}
+      {pageStep === 'djcontrol' && <DJControlRoom />}
     </div>
   );
 };

@@ -9,7 +9,7 @@ import { RateLimiter } from '../utils/RateLimiter';
 const chatRateLimiter = new RateLimiter(5, 1); // Max 5 messages burst, 1 msg per second
 
 export function registerChatHandlers(io: Server, socket: Socket, playerSession: { current: Player | null }): void {
-  socket.on(SOCKET_EVENTS.CHAT_MESSAGE, (payload: { message: string }) => {
+  socket.on(SOCKET_EVENTS.CHAT_MESSAGE, (payload: { message: string, target?: string }) => {
     if (!playerSession.current || !payload.message) return;
 
     if (!chatRateLimiter.tryConsume(socket.id)) {
@@ -35,15 +35,33 @@ export function registerChatHandlers(io: Server, socket: Socket, playerSession: 
     const cleanMessage = ValidationService.sanitizeChat(payload.message);
     if (!cleanMessage) return;
 
-    const chatMsg: ChatMessage = {
+    const chatMsg: ChatMessage & { target?: string } = {
       id: `chat-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       senderId: socket.id,
       nickname: playerSession.current.nickname,
       avatarType: playerSession.current.avatarType,
       message: cleanMessage,
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      target: payload.target
     };
 
-    io.to(playerSession.current.roomId).emit(SOCKET_EVENTS.CHAT_MESSAGE, chatMsg);
+    if (payload.target === 'team') {
+      const team = playerSession.current.team;
+      if (!team) {
+        socket.emit(SOCKET_EVENTS.ERROR, { message: 'You are not in a team.' });
+        return;
+      }
+      
+      const instance = RoomManager.getRoomInstance(playerSession.current.roomId);
+      if (instance) {
+        for (const [sid, p] of instance.players) {
+          if (p.team === team) {
+            io.to(sid).emit(SOCKET_EVENTS.CHAT_MESSAGE, chatMsg);
+          }
+        }
+      }
+    } else {
+      io.to(playerSession.current.roomId).emit(SOCKET_EVENTS.CHAT_MESSAGE, chatMsg);
+    }
   });
 }
